@@ -188,11 +188,11 @@ class NotificationManager {
 				const pollPromises = [AccountTrackerController.refresh()];
 				switch (originalTransaction.assetType) {
 					case 'ERC20': {
-						pollPromises.push(...[TokenBalancesController.refresh(), AssetsDetectionController.refresh()]);
+						pollPromises.push(...[TokenBalancesController.poll(), AssetsDetectionController.poll()]);
 						break;
 					}
 					case 'ERC721':
-						pollPromises.push(AssetsDetectionController.refresh());
+						pollPromises.push(AssetsDetectionController.poll());
 						break;
 				}
 				Promise.all(pollPromises);
@@ -439,34 +439,5 @@ export default {
 	},
 	showSimpleNotification(data) {
 		return instance?.showSimpleNotification(data);
-	},
-	showInstantPaymentNotification(type) {
-		setTimeout(() => {
-			const notification = {
-				type,
-				autoHide: type.indexOf('success') !== -1,
-				transaction: {
-					paymentChannelTransaction: true
-				}
-			};
-			if (notification.autoHide) {
-				notification.duration = 5000;
-			}
-
-			return instance._showNotification(notification);
-		}, 300);
-	},
-	showIncomingPaymentNotification: amount => {
-		instance._showNotification({
-			type: 'received_payment',
-			transaction: {
-				amount,
-				assetType: '',
-				paymentChannelTransaction: true
-			},
-			callback: () => instance.goTo('PaymentChannelHome'),
-			autoHide: true,
-			duration: 5000
-		});
 	}
 };

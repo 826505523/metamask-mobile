@@ -16,40 +16,51 @@ const NetworkList = {
 		shortName: 'Ethereum',
 		networkId: 1,
 		chainId: 1,
-		color: '#3cc29e'
+		hexChainId: '0x1',
+		color: '#3cc29e',
+		networkType: 'mainnet'
 	},
 	[ROPSTEN]: {
 		name: 'Ropsten Test Network',
 		shortName: 'Ropsten',
 		networkId: 3,
 		chainId: 3,
-		color: '#ff4a8d'
+		hexChainId: '0x3',
+		color: '#ff4a8d',
+		networkType: 'ropsten'
 	},
 	[KOVAN]: {
 		name: 'Kovan Test Network',
 		shortName: 'Kovan',
 		networkId: 42,
 		chainId: 42,
-		color: '#7057ff'
+		hexChainId: '0x2a',
+		color: '#7057ff',
+		networkType: 'kovan'
 	},
 	[RINKEBY]: {
 		name: 'Rinkeby Test Network',
 		shortName: 'Rinkeby',
 		networkId: 4,
 		chainId: 4,
-		color: '#f6c343'
+		hexChainId: '0x4',
+		color: '#f6c343',
+		networkType: 'rinkeby'
 	},
 	[GOERLI]: {
 		name: 'Goerli Test Network',
 		shortName: 'Goerli',
 		networkId: 5,
 		chainId: 5,
-		color: '#3099f2'
+		hexChainId: '0x5',
+		color: '#3099f2',
+		networkType: 'goerly'
 	},
 	[RPC]: {
 		name: 'Private Network',
 		shortName: 'Private',
-		color: colors.grey000
+		color: colors.grey000,
+		networkType: 'rpc'
 	}
 };
 
@@ -60,6 +71,15 @@ export default NetworkList;
 export const getAllNetworks = () => NetworkListKeys.filter(name => name !== RPC);
 
 export const isMainNet = network => network?.provider?.type === MAINNET || network === String(1);
+
+export const getDecimalChainId = chainId => {
+	if (!chainId || typeof chainId !== 'string' || !chainId.startsWith('0x')) {
+		return chainId;
+	}
+	return parseInt(chainId, 16).toString(10);
+};
+
+export const isMainnetByChainId = chainId => getDecimalChainId(String(chainId)) === String(1);
 
 export const getNetworkName = id => NetworkListKeys.find(key => NetworkList[key].networkId === Number(id));
 
@@ -119,6 +139,29 @@ export function getBlockExplorerName(blockExplorerUrl) {
 	return tempBlockExplorerName[0].toUpperCase() + tempBlockExplorerName.slice(1);
 }
 
+/**
+ * Checks whether the given number primitive chain ID is safe.
+ * Because some cryptographic libraries we use expect the chain ID to be a
+ * number primitive, it must not exceed a certain size.
+ *
+ * @param {number} chainId - The chain ID to check for safety.
+ * @returns {boolean} Whether the given chain ID is safe.
+ */
 export function isSafeChainId(chainId) {
 	return Number.isSafeInteger(chainId) && chainId > 0 && chainId <= AppConstants.MAX_SAFE_CHAIN_ID;
+}
+
+/**
+ * Checks whether the given value is a 0x-prefixed, non-zero, non-zero-padded,
+ * hexadecimal string.
+ *
+ * @param {any} value - The value to check.
+ * @returns {boolean} True if the value is a correctly formatted hex string,
+ * false otherwise.
+ */
+export function isPrefixedFormattedHexString(value) {
+	if (typeof value !== 'string') {
+		return false;
+	}
+	return /^0x[1-9a-f]+[0-9a-f]*$/iu.test(value);
 }

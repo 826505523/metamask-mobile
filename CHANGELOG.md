@@ -1,5 +1,55 @@
 # Changelog
 
+## Current Develop Branch
+
+## v2.1.0 - Apr 12 2021
+- [#2456](https://github.com/MetaMask/metamask-mobile/pull/2456): Analytics v2 (priority 1)
+- [#2408](https://github.com/MetaMask/metamask-mobile/pull/2408): Fix/gas estimations
+- [#2479](https://github.com/MetaMask/metamask-mobile/pull/2479): remove controllers tgz
+- [#2441](https://github.com/MetaMask/metamask-mobile/pull/2441): Improvement/assets by chainid
+- [#2442](https://github.com/MetaMask/metamask-mobile/pull/2442): Improvement/chain ticker
+- [#2372](https://github.com/MetaMask/metamask-mobile/pull/2372): Remove instapay
+- [#2467](https://github.com/MetaMask/metamask-mobile/pull/2467): Fix iOS build
+- [#2084](https://github.com/MetaMask/metamask-mobile/pull/2084): Migrate from AsyncStorage to FileStorage
+- [#2443](https://github.com/MetaMask/metamask-mobile/pull/2443): Update terms and privacy links
+- [#2318](https://github.com/MetaMask/metamask-mobile/pull/2318): Add custom network rpc API
+- [#2306](https://github.com/MetaMask/metamask-mobile/pull/2306): Feature/high gas warn
+- [#2463](https://github.com/MetaMask/metamask-mobile/pull/2463): update pods
+- [#2448](https://github.com/MetaMask/metamask-mobile/pull/2448): Add resolution for netmask
+- [#2445](https://github.com/MetaMask/metamask-mobile/pull/2445): Add resolution for y18n
+- [#2404](https://github.com/MetaMask/metamask-mobile/pull/2404): Bump react-native-branch from 5.0.0 to 5.0.1
+- [#2439](https://github.com/MetaMask/metamask-mobile/pull/2439): json-rpc-engine@6.1.0
+- [#2413](https://github.com/MetaMask/metamask-mobile/pull/2413): remove "git add" per husky warning
+- [#2431](https://github.com/MetaMask/metamask-mobile/pull/2431): Update BN import
+
+## v2.0.1 - Mar 24 2021
+- [#2430](https://github.com/MetaMask/metamask-mobile/pull/2430): Fix/send to style
+- [#2426](https://github.com/MetaMask/metamask-mobile/pull/2426): bugfix/allow seedphrases when locked
+- [#2422](https://github.com/MetaMask/metamask-mobile/pull/2422): bugfix/delete wallet with random password
+- [#2417](https://github.com/MetaMask/metamask-mobile/pull/2417): Bugfix/sync improvements
+- [#2418](https://github.com/MetaMask/metamask-mobile/pull/2418): V2 fixes
+- [#2156](https://github.com/MetaMask/metamask-mobile/pull/2156): Translations with update script
+
+## v2.0.0 - Mar 16 2021
+- [#2383](https://github.com/MetaMask/metamask-mobile/pull/2383): swaps/received destination amount
+- [#2379](https://github.com/MetaMask/metamask-mobile/pull/2379): Swaps/fix decode tx render amounts
+- [#2377](https://github.com/MetaMask/metamask-mobile/pull/2377): bugfix/dont modify local transactions
+- [#2376](https://github.com/MetaMask/metamask-mobile/pull/2376): Swaps: Sort quotes by asc fees when destination amount is the same
+- [#2370](https://github.com/MetaMask/metamask-mobile/pull/2370): bugfix/swaps bugs
+- [#2321](https://github.com/MetaMask/metamask-mobile/pull/2321): Swaps v1
+- [#2365](https://github.com/MetaMask/metamask-mobile/pull/2365): bugfix/transactions filtering
+- [#2253](https://github.com/MetaMask/metamask-mobile/pull/2253): Use Etherscan API for incoming token transactions
+- [#2245](https://github.com/MetaMask/metamask-mobile/pull/2245): Fix transaction history
+- [#2363](https://github.com/MetaMask/metamask-mobile/pull/2363): fix: `poll` after notification don't `refresh`
+- [#2344](https://github.com/MetaMask/metamask-mobile/pull/2344): Sync with extension chain id
+- [#2269](https://github.com/MetaMask/metamask-mobile/pull/2269): @metamask/contract-metadata@1.23.0
+- [#2357](https://github.com/MetaMask/metamask-mobile/pull/2357): Update `elliptic` to v6.5.4 to address security advisory
+- [#2247](https://github.com/MetaMask/metamask-mobile/pull/2247): Provide chainId correctly
+- [#2196](https://github.com/MetaMask/metamask-mobile/pull/2196): improvement/handle provider updates
+- [#2157](https://github.com/MetaMask/metamask-mobile/pull/2157): Swaps: Alpha 2
+- [#2272](https://github.com/MetaMask/metamask-mobile/pull/2272): Update twitter handle in README
+- [#2265](https://github.com/MetaMask/metamask-mobile/pull/2265): Fix input state
+
 ## v1.0.11 - Feb 15 2021
 - [#2257](https://github.com/MetaMask/metamask-mobile/pull/2257): bugfix/use bignumber for transfer deeplinks
 - [#2256](https://github.com/MetaMask/metamask-mobile/pull/2256): Fix account list scroll
