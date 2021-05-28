@@ -33,7 +33,6 @@ export const ANALYTICS_EVENTS_V2 = {
 	NETWORK_ADDED: generateOpt('Network Added'),
 	NETWORK_REQUESTED: generateOpt('Network Requested'),
 	NETWORK_REQUEST_REJECTED: generateOpt('Network Request Rejected'),
-	NETWORK_SWITCH_REJECTED: generateOpt('Network Switch Rejected'),
 	// Send transaction
 	SEND_TRANSACTION_STARTED: generateOpt('Send Transaction Started'),
 	SEND_TRANSACTION_COMPLETED: generateOpt('Send Transaction Completed')
@@ -46,8 +45,8 @@ export const ANALYTICS_EVENTS_V2 = {
  * @param {Object} params
  */
 export const trackEventV2 = (eventName, params) => {
-	try {
-		InteractionManager.runAfterInteractions(() => {
+	InteractionManager.runAfterInteractions(() => {
+		try {
 			if (!params) {
 				Analytics.trackEvent(eventName);
 			}
@@ -58,11 +57,7 @@ export const trackEventV2 = (eventName, params) => {
 			for (const key in params) {
 				const property = params[key];
 
-				if (typeof property === 'string' || property instanceof String) {
-					// Non-anonymous properties - add to both
-					userParams[key] = property;
-					anonymousParams[key] = property;
-				} else if (typeof property === 'object') {
+				if (property && typeof property === 'object') {
 					if (property.anonymous) {
 						// Anonymous property - add only to anonymous params
 						anonymousParams[key] = property.value;
@@ -71,6 +66,10 @@ export const trackEventV2 = (eventName, params) => {
 						userParams[key] = property.value;
 						anonymousParams[key] = property.value;
 					}
+				} else {
+					// Non-anonymous properties - add to both
+					userParams[key] = property;
+					anonymousParams[key] = property;
 				}
 			}
 
@@ -83,13 +82,36 @@ export const trackEventV2 = (eventName, params) => {
 			if (Object.keys(anonymousParams).length) {
 				Analytics.trackEventWithParameters(eventName, anonymousParams, true);
 			}
+		} catch (error) {
+			Logger.error(error, 'Error logging analytics');
+		}
+	});
+};
+
+/**
+ * This functions logs errors to analytics instead of sentry.
+ * The objective is to log errors (that are not errors from our side) like “Invalid Password”.
+ * An error like this generally means a user inserted the wrong password, so logging to sentry doesn't make sense.
+ * But we still want to log this to analytics so that we are aware of a rapid increase which may mean it's an error from our side, for example, an error with the encryption library.
+ * @param {String} type
+ * @param {String} errorMessage
+ * @param {String} otherInfo
+ */
+export const trackErrorAsAnalytics = (type, errorMessage, otherInfo) => {
+	try {
+		Analytics.trackEventWithParameters(generateOpt('Error occurred'), {
+			error: true,
+			type,
+			errorMessage,
+			otherInfo
 		});
 	} catch (error) {
-		Logger.error(error, 'Error logging analytics');
+		Logger.error(error, 'Error logging analytics - trackErrorAsAnalytics');
 	}
 };
 
 export default {
 	ANALYTICS_EVENTS: ANALYTICS_EVENTS_V2,
-	trackEvent: trackEventV2
+	trackEvent: trackEventV2,
+	trackErrorAsAnalytics
 };

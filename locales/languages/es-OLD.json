@@ -226,7 +226,7 @@
 		"collectible": "Collecionable",
 		"collectibles": "COLECCIONABLES",
 		"transactions": "TRANSACCIONES",
-		"no_collectibles": "No tienes coleccionables",
+		"no_collectibles": "¿No ves tu coleccionable?",
 		"add_tokens": "AGREGAR TOKENS",
 		"no_tokens": "No tienes tokens",
 		"add_collectibles": "AGREGAR COLECCIONABLE",
@@ -1088,7 +1088,7 @@
 	},
 	"offline_mode": {
 		"title": "Sin Conexión",
-		"text": "Revisa tu conexión de internet e intenta nuevamente",
+		"text": "No se puede conectar al host de blockchain.",
 		"try_again": "Intentar de nuevo"
 	},
 	"walletconnect_return_modal": {

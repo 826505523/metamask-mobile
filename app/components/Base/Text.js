@@ -16,7 +16,16 @@ const style = StyleSheet.create({
 	right: {
 		textAlign: 'right'
 	},
+	red: {
+		color: colors.red
+	},
+	black: {
+		color: colors.black
+	},
 	bold: fontStyles.bold,
+	blue: {
+		color: colors.blue
+	},
 	green: {
 		color: colors.green400
 	},
@@ -25,6 +34,9 @@ const style = StyleSheet.create({
 	},
 	small: {
 		fontSize: 12
+	},
+	big: {
+		fontSize: 16
 	},
 	upper: {
 		textTransform: 'uppercase'
@@ -58,8 +70,12 @@ const Text = ({
 	right,
 	bold,
 	green,
+	black,
+	blue,
+	red,
 	primary,
 	small,
+	big,
 	upper,
 	modal,
 	disclaimer,
@@ -77,9 +93,14 @@ const Text = ({
 			right && style.right,
 			bold && style.bold,
 			green && style.green,
+			black && style.black,
+			blue && style.blue,
+			red && style.red,
+			black && style.black,
 			primary && style.primary,
 			disclaimer && [style.small, style.disclaimer],
 			small && style.small,
+			big && style.big,
 			upper && style.upper,
 			modal && style.modal,
 			link && style.link,
@@ -98,10 +119,14 @@ Text.defaultProps = {
 	right: false,
 	bold: false,
 	green: false,
+	black: false,
+	blue: false,
+	red: false,
 	primary: false,
 	disclaimer: false,
 	modal: false,
 	small: false,
+	big: undefined,
 	upper: false,
 	link: false,
 	strikethrough: false,
@@ -131,6 +156,18 @@ Text.propTypes = {
 	 */
 	green: PropTypes.bool,
 	/**
+	 * Makes text black
+	 */
+	black: PropTypes.bool,
+	/**
+	 * Makes text blue
+	 */
+	blue: PropTypes.bool,
+	/**
+	 * Makes text red
+	 */
+	red: PropTypes.bool,
+	/**
 	 * Makes text fontPrimary color
 	 */
 	primary: PropTypes.bool,
@@ -148,6 +185,10 @@ Text.propTypes = {
 	 * Makes text small
 	 */
 	small: PropTypes.bool,
+	/**
+	 * Makes text big
+	 */
+	big: PropTypes.bool,
 	/**
 	 * Makes text uppercase
 	 */

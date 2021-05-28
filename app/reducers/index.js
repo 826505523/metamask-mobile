@@ -13,10 +13,13 @@ import onboardingReducer from './onboarding';
 import fiatOrders from './fiatOrders';
 import swapsReducer from './swaps';
 import notificationReducer from './notification';
+import infuraAvailabilityReducer from './infuraAvailability';
+import collectiblesReducer from './collectibles';
 import { combineReducers } from 'redux';
 
 const rootReducer = combineReducers({
 	analytics: analyticsReducer,
+	collectibles: collectiblesReducer,
 	engine: engineReducer,
 	privacy: privacyReducer,
 	bookmarks: bookmarksReducer,
@@ -30,7 +33,8 @@ const rootReducer = combineReducers({
 	onboarding: onboardingReducer,
 	notification: notificationReducer,
 	swaps: swapsReducer,
-	fiatOrders
+	fiatOrders,
+	infuraAvailability: infuraAvailabilityReducer
 });
 
 export default rootReducer;

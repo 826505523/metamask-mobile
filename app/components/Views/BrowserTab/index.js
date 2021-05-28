@@ -59,13 +59,14 @@ import { createAsyncMiddleware } from 'json-rpc-engine';
 import { ethErrors } from 'eth-json-rpc-errors';
 
 import EntryScriptWeb3 from '../../../core/EntryScriptWeb3';
-import { getVersion } from 'react-native-device-info';
+import { getVersion, isEmulatorSync } from 'react-native-device-info';
 import ErrorBoundary from '../ErrorBoundary';
 import { RPC } from '../../../constants/network';
 
 import RPCMethods from '../../../core/RPCMethods';
 import AddCustomNetwork from '../../UI/AddCustomNetwork';
 import SwitchCustomNetwork from '../../UI/SwitchCustomNetwork';
+import { trackErrorAsAnalytics } from '../../../util/analyticsV2';
 
 const { HOMEPAGE_URL, USER_AGENT, NOTIFICATION_NAMES } = AppConstants;
 const HOMEPAGE_HOST = 'home.metamask.io';
@@ -418,7 +419,7 @@ export const BrowserTab = props => {
 				const { privacyMode, selectedAddress } = props;
 				const isEnabled = !privacyMode || approvedHosts[hostname];
 
-				return isEnabled ? [selectedAddress.toLowerCase()] : [];
+				return isEnabled && selectedAddress ? [selectedAddress] : [];
 			};
 
 			const rpcMethods = {
@@ -464,7 +465,7 @@ export const BrowserTab = props => {
 						});
 
 						if (approved) {
-							res.result = [selectedAddress.toLowerCase()];
+							res.result = selectedAddress ? [selectedAddress] : [];
 						} else {
 							throw ethErrors.provider.userRejectedRequest('User denied account authorization.');
 						}
@@ -913,8 +914,13 @@ export const BrowserTab = props => {
 					ensIgnoreList.push(hostname);
 					return { url: fullUrl, reload: true };
 				}
-				Logger.error(err, 'Failed to resolve ENS name');
-				Alert.alert(strings('browser.error'), strings('browser.failed_to_resolve_ens_name'));
+				if (err?.message?.startsWith('EnsIpfsResolver - no known ens-ipfs registry for chainId')) {
+					trackErrorAsAnalytics('Browser: Failed to resolve ENS name for chainId', err?.message);
+				} else {
+					Logger.error(err, 'Failed to resolve ENS name');
+				}
+
+				Alert.alert(strings('browser.failed_to_resolve_ens_name'), err.message);
 				goBack();
 			}
 		},
@@ -988,7 +994,7 @@ export const BrowserTab = props => {
 	 * Handle keyboard hide
 	 */
 	const keyboardDidHide = useCallback(() => {
-		if (!isTabActive()) return false;
+		if (!isTabActive() || isEmulatorSync()) return false;
 		if (!fromHomepage.current) {
 			if (showUrlModal) {
 				hideUrlModal();
@@ -1413,12 +1419,17 @@ export const BrowserTab = props => {
 							onPress={() => (!autocompleteValue ? setShowUrlModal(false) : setAutocompleteValue(''))}
 							style={styles.iconCloseButton}
 						>
-							<MaterialIcon name="close" size={20} style={[styles.icon, styles.iconClose]} />
+							<MaterialIcon
+								name="close"
+								size={20}
+								style={[styles.icon, styles.iconClose]}
+								testID={'android-cancel-url-button'}
+							/>
 						</TouchableOpacity>
 					) : (
 						<TouchableOpacity
 							style={styles.cancelButton}
-							testID={'cancel-url-button'}
+							testID={'ios-cancel-url-button'}
 							onPress={toggleUrlModal}
 						>
 							<Text style={styles.cancelButtonText}>{strings('browser.cancel')}</Text>
@@ -1961,7 +1972,7 @@ const mapStateToProps = state => ({
 	networkProvider: state.engine.backgroundState.NetworkController.provider,
 	networkType: state.engine.backgroundState.NetworkController.provider.type,
 	network: state.engine.backgroundState.NetworkController.network,
-	selectedAddress: state.engine.backgroundState.PreferencesController.selectedAddress.toLowerCase(),
+	selectedAddress: state.engine.backgroundState.PreferencesController.selectedAddress?.toLowerCase(),
 	privacyMode: state.privacy.privacyMode,
 	searchEngine: state.settings.searchEngine,
 	whitelist: state.browser.whitelist,

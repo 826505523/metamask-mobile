@@ -24,8 +24,6 @@ import { strings } from '../../../../locales/i18n';
 import SecureKeychain from '../../../core/SecureKeychain';
 import AppConstants from '../../../core/AppConstants';
 import setOnboardingWizardStep from '../../../actions/wizard';
-// eslint-disable-next-line import/named
-import { NavigationActions } from 'react-navigation';
 import TermsAndConditions from '../TermsAndConditions';
 import zxcvbn from 'zxcvbn';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -42,7 +40,7 @@ import {
 	TRUE
 } from '../../../constants/storage';
 import Logger from '../../../util/Logger';
-import { getPasswordStrengthWord, passwordRequirementsMet } from '../../../util/password';
+import { getPasswordStrengthWord, passwordRequirementsMet, MIN_PASSWORD_LENGTH } from '../../../util/password';
 import importAdditionalAccounts from '../../../util/importAdditionalAccounts';
 
 const styles = StyleSheet.create({
@@ -64,20 +62,23 @@ const styles = StyleSheet.create({
 		...fontStyles.bold
 	},
 	field: {
-		marginVertical: 5
+		marginVertical: 5,
+		position: 'relative'
 	},
 	fieldRow: {
 		flexDirection: 'row',
 		alignItems: 'flex-end'
 	},
 	fieldCol: {
-		width: '50%'
+		width: '70%'
 	},
 	fieldColRight: {
-		flexDirection: 'row-reverse'
+		flexDirection: 'row-reverse',
+		width: '30%'
 	},
 	label: {
-		fontSize: 14,
+		color: colors.black,
+		fontSize: 16,
 		marginBottom: 12,
 		...fontStyles.normal
 	},
@@ -113,6 +114,7 @@ const styles = StyleSheet.create({
 	biometryLabel: {
 		flex: 1,
 		fontSize: 16,
+		color: colors.black,
 		...fontStyles.normal
 	},
 	biometrySwitch: {
@@ -124,11 +126,8 @@ const styles = StyleSheet.create({
 	},
 	passwordStrengthLabel: {
 		height: 20,
-		marginLeft: 5,
-		marginTop: 10,
-		fontSize: 12,
-		color: colors.fontSecondary,
-		textAlign: 'left',
+		fontSize: 15,
+		color: colors.black,
 		...fontStyles.normal
 	},
 	// eslint-disable-next-line react-native/no-unused-styles
@@ -145,7 +144,8 @@ const styles = StyleSheet.create({
 	},
 	showMatchingPasswords: {
 		position: 'absolute',
-		marginTop: 8,
+		top: 52,
+		right: 17,
 		alignSelf: 'flex-end'
 	},
 	qrCode: {
@@ -162,6 +162,11 @@ const styles = StyleSheet.create({
 	inputFocused: {
 		borderColor: colors.blue,
 		borderWidth: 2
+	},
+	input: {
+		...fontStyles.normal,
+		fontSize: 16,
+		paddingTop: 2
 	}
 });
 
@@ -282,20 +287,12 @@ class ImportFromSeed extends PureComponent {
 				this.props.setLockTime(AppConstants.DEFAULT_LOCK_TIMEOUT);
 				this.props.seedphraseBackedUp();
 				if (!metricsOptIn) {
-					this.props.navigation.navigate(
-						'ManualBackupStep3',
-						{},
-						NavigationActions.navigate({ routeName: 'OptinMetrics' })
-					);
+					this.props.navigation.navigate('OptinMetrics');
 				} else if (onboardingWizard) {
 					this.props.navigation.navigate('ManualBackupStep3');
 				} else {
 					this.props.setOnboardingWizardStep(1);
-					this.props.navigation.navigate(
-						'ManualBackupStep3',
-						{},
-						NavigationActions.navigate({ routeName: 'WalletView' })
-					);
+					this.props.navigation.navigate('WalletView');
 				}
 				await importAdditionalAccounts();
 			} catch (error) {
@@ -448,6 +445,7 @@ class ImportFromSeed extends PureComponent {
 						</View>
 						{hideSeedPhraseInput ? (
 							<OutlinedTextField
+								style={styles.input}
 								containerStyle={inputWidth}
 								inputContainerStyle={styles.padding}
 								placeholder={strings('import_from_seed.seed_phrase_placeholder')}
@@ -501,6 +499,7 @@ class ImportFromSeed extends PureComponent {
 								</View>
 							</View>
 							<OutlinedTextField
+								style={styles.input}
 								containerStyle={inputWidth}
 								ref={this.passwordInput}
 								placeholder={strings('import_from_seed.new_password')}
@@ -529,6 +528,7 @@ class ImportFromSeed extends PureComponent {
 						<View style={styles.field}>
 							<Text style={styles.label}>{strings('import_from_seed.confirm_password')}</Text>
 							<OutlinedTextField
+								style={styles.input}
 								containerStyle={inputWidth}
 								ref={this.confirmPasswordInput}
 								testID={'input-password-field-confirm'}
@@ -549,7 +549,7 @@ class ImportFromSeed extends PureComponent {
 								) : null}
 							</View>
 							<Text style={styles.passwordStrengthLabel}>
-								{strings('choose_password.must_be_at_least', { number: 8 })}
+								{strings('choose_password.must_be_at_least', { number: MIN_PASSWORD_LENGTH })}
 							</Text>
 						</View>
 

@@ -1,6 +1,7 @@
 import Adapter from 'enzyme-adapter-react-16';
 import Enzyme from 'enzyme';
 import Engine from '../core/Engine';
+
 import NotificationManager from '../core/NotificationManager';
 import { NativeModules } from 'react-native';
 import mockAsyncStorage from '../../node_modules/@react-native-community/async-storage/jest/async-storage-mock';
@@ -85,7 +86,6 @@ jest.mock('react-native-keychain', () => ({ getSupportedBiometryType: () => Prom
 jest.mock('react-native-share', () => 'RNShare');
 jest.mock('react-native-branch', () => ({ subscribe: () => 'RNBranch' }));
 jest.mock('react-native-sensors', () => 'RNSensors');
-jest.mock('react-native-device-info', () => 'DeviceInfo');
 jest.mock('react-native-search-api', () => 'SearchApi');
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('react-native-background-timer', () => 'RNBackgroundTimer');
@@ -125,3 +125,10 @@ jest.mock('react-native/Libraries/Components/Touchable/TouchableHighlight', () =
 jest.mock('react-native/Libraries/Components/TextInput/TextInput', () => 'TextInput');
 
 jest.mock('react-native/Libraries/Animated/src/NativeAnimatedHelper');
+
+jest.mock('react-native/Libraries/Interaction/InteractionManager', () => ({
+	runAfterInteractions: jest.fn(),
+	createInteractionHandle: jest.fn(),
+	clearInteractionHandle: jest.fn(),
+	setDeadline: jest.fn()
+}));

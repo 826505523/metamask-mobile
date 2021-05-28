@@ -10,6 +10,7 @@ import { isSmartContractAddress } from '../../../util/transactions';
 import Device from '../../../util/Device';
 import { connect } from 'react-redux';
 import AnalyticsV2 from '../../../util/analyticsV2';
+import { toLowerCaseCompare } from '../../../util/general';
 
 const styles = StyleSheet.create({
 	wrapper: {
@@ -74,14 +75,16 @@ class AddCustomCollectible extends PureComponent {
 	};
 
 	getAnalyticsParams = () => {
-		const { NetworkController } = Engine.context;
-		const { chainId, type } = NetworkController?.state?.provider || {};
-		const { address } = this.state;
-		return {
-			collectible_address: { value: address, anonymous: true },
-			network_name: type,
-			chain_id: chainId
-		};
+		try {
+			const { NetworkController } = Engine.context;
+			const { chainId, type } = NetworkController?.state?.provider || {};
+			return {
+				network_name: type,
+				chain_id: chainId
+			};
+		} catch (error) {
+			return {};
+		}
 	};
 
 	addCollectible = async () => {
@@ -166,8 +169,7 @@ class AddCustomCollectible extends PureComponent {
 		const { selectedAddress } = this.props;
 		try {
 			const owner = await AssetsContractController.getOwnerOf(address, tokenId);
-			const isOwner = owner.toLowerCase() === selectedAddress.toLowerCase();
-			return isOwner;
+			return toLowerCaseCompare(owner, selectedAddress);
 		} catch (e) {
 			return false;
 		}

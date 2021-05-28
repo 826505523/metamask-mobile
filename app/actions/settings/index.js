@@ -12,6 +12,20 @@ export function setShowHexData(showHexData) {
 	};
 }
 
+export function setShowCustomNonce(showCustomNonce) {
+	return {
+		type: 'SET_SHOW_CUSTOM_NONCE',
+		showCustomNonce
+	};
+}
+
+export function setHideZeroBalanceTokens(hideZeroBalanceTokens) {
+	return {
+		type: 'SET_HIDE_ZERO_BALANCE_TOKENS',
+		hideZeroBalanceTokens
+	};
+}
+
 export function setLockTime(lockTime) {
 	return {
 		type: 'SET_LOCK_TIME',
