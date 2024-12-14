@@ -1,311 +1,297 @@
 import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
-import { InteractionManager, TouchableOpacity, SafeAreaView, Dimensions, StyleSheet, View, Alert } from 'react-native';
-import Modal from 'react-native-modal';
+import {
+  SafeAreaView,
+  Dimensions,
+  StyleSheet,
+  View,
+  Alert,
+} from 'react-native';
 import Share from 'react-native-share';
 import QRCode from 'react-native-qrcode-svg';
-import Clipboard from '@react-native-community/clipboard';
-import EvilIcons from 'react-native-vector-icons/EvilIcons';
 import { connect } from 'react-redux';
 
-import Analytics from '../../../core/Analytics';
+import { MetaMetricsEvents } from '../../../core/Analytics';
 import Logger from '../../../util/Logger';
-import Device from '../../../util/Device';
 import { strings } from '../../../../locales/i18n';
-import { ANALYTICS_EVENT_OPTS } from '../../../util/analytics';
 import { generateUniversalLinkAddress } from '../../../util/payment-link-generator';
-import { allowedToBuy } from '../FiatOrders';
 import { showAlert } from '../../../actions/alert';
-import { toggleReceiveModal } from '../../../actions/modals';
 import { protectWalletModalVisible } from '../../../actions/user';
 
-import { colors, fontStyles } from '../../../styles/common';
-import Text from '../../Base/Text';
-import ModalHandler from '../../Base/ModalHandler';
-import ModalDragger from '../../Base/ModalDragger';
-import AddressQRCode from '../../Views/AddressQRCode';
-import EthereumAddress from '../EthereumAddress';
+import { fontStyles } from '../../../styles/common';
 import GlobalAlert from '../GlobalAlert';
 import StyledButton from '../StyledButton';
+import ClipboardManager from '../../../core/ClipboardManager';
+import { ThemeContext, mockTheme } from '../../../util/theme';
+import { selectChainId } from '../../../selectors/networkController';
+import { isNetworkRampSupported } from '../Ramp/utils';
+import { createBuyNavigationDetails } from '../Ramp/routes/utils';
+import { selectSelectedInternalAccountFormattedAddress } from '../../../selectors/accountsController';
+import { getRampNetworks } from '../../../reducers/fiatOrders';
+import { RequestPaymentModalSelectorsIDs } from '../../../../e2e/selectors/Receive/RequestPaymentModal.selectors';
+import { withMetricsAwareness } from '../../../components/hooks/useMetrics';
+import { getDecimalChainId } from '../../../util/networks';
+import QRAccountDisplay from '../../Views/QRAccountDisplay';
+import PNG_MM_LOGO_PATH from '../../../images/fox.png';
 
-const styles = StyleSheet.create({
-	wrapper: {
-		backgroundColor: colors.white,
-		borderTopLeftRadius: 10,
-		borderTopRightRadius: 10
-	},
-	body: {
-		alignItems: 'center',
-		paddingHorizontal: 15
-	},
-	qrWrapper: {
-		margin: 15
-	},
-	addressWrapper: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		margin: 15,
-		padding: 9,
-		paddingHorizontal: 15,
-		backgroundColor: colors.grey000,
-		borderRadius: 30
-	},
-	copyButton: {
-		backgroundColor: colors.grey050,
-		color: colors.fontPrimary,
-		borderRadius: 12,
-		overflow: 'hidden',
-		paddingVertical: 3,
-		paddingHorizontal: 6,
-		marginHorizontal: 6
-	},
-	actionRow: {
-		flexDirection: 'row',
-		marginBottom: 15
-	},
-	actionButton: {
-		flex: 1,
-		marginHorizontal: 8
-	},
-	title: {
-		...fontStyles.normal,
-		color: colors.fontPrimary,
-		fontSize: 18,
-		flexDirection: 'row',
-		alignSelf: 'center'
-	},
-	titleWrapper: {
-		marginTop: 10
-	}
-});
+const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
+
+const createStyles = (theme) =>
+  StyleSheet.create({
+    wrapper: {
+      backgroundColor: theme.colors.background.default,
+      borderTopLeftRadius: 10,
+      borderTopRightRadius: 10,
+      marginTop: windowHeight * 0.05 + 160,
+      marginBottom: 20,
+      height: windowHeight * 0.95 - 180,
+    },
+    body: {
+      alignItems: 'center',
+      paddingHorizontal: 15,
+      height: '100%',
+      width: '100%',
+      display: 'flex',
+      justifyContent: 'space-around',
+    },
+    qrWrapper: {
+      margin: 8,
+      padding: 8,
+      backgroundColor: theme.brandColors.white,
+    },
+    addressWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      margin: 15,
+      padding: 9,
+      paddingHorizontal: 15,
+      backgroundColor: theme.colors.background.alternative,
+      borderRadius: 30,
+    },
+    copyButton: {
+      backgroundColor: theme.colors.background.default,
+      color: theme.colors.primary.default,
+      borderRadius: 12,
+      overflow: 'hidden',
+      paddingVertical: 3,
+      paddingHorizontal: 6,
+      marginHorizontal: 6,
+      borderWidth: 1,
+      borderColor: theme.colors.primary.default,
+    },
+    qrCode: {
+      padding: 24,
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: theme.colors.background.alternative,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      marginBottom: 15,
+    },
+    actionButton: {
+      flex: 1,
+      marginHorizontal: 8,
+      width: '100%',
+    },
+    title: {
+      ...fontStyles.normal,
+      color: theme.colors.text.default,
+      fontSize: 18,
+      flexDirection: 'row',
+      alignSelf: 'center',
+    },
+    titleWrapper: {
+      marginTop: 10,
+    },
+  });
 
 /**
  * PureComponent that renders receive options
  */
 class ReceiveRequest extends PureComponent {
-	static propTypes = {
-		/**
-		 * The navigator object
-		 */
-		navigation: PropTypes.object,
-		/**
-		 * Selected address as string
-		 */
-		selectedAddress: PropTypes.string,
-		/**
-		 * Asset to receive, could be not defined
-		 */
-		receiveAsset: PropTypes.object,
-		/**
-		 * Action that toggles the receive modal
-		 */
-		toggleReceiveModal: PropTypes.func,
-		/**
-		/* Triggers global alert
-		*/
-		showAlert: PropTypes.func,
-		/**
-		 * Network id
-		 */
-		network: PropTypes.string,
-		/**
-		 * Prompts protect wallet modal
-		 */
-		protectWalletModalVisible: PropTypes.func,
-		/**
-		 * Hides the modal that contains the component
-		 */
-		hideModal: PropTypes.func,
-		/**
-		 * redux flag that indicates if the user
-		 * completed the seed phrase backup flow
-		 */
-		seedphraseBackedUp: PropTypes.bool
-	};
+  static propTypes = {
+    /**
+     * The navigator object
+     */
+    navigation: PropTypes.object,
+    /**
+     * Selected address as string
+     */
+    selectedAddress: PropTypes.string,
+    /**
+     * Asset to receive, could be not defined
+     */
+    receiveAsset: PropTypes.object,
+    /**
+     /* Triggers global alert
+     */
+    showAlert: PropTypes.func,
+    /**
+     * Network provider chain id
+     */
+    chainId: PropTypes.string,
+    /**
+     * Prompts protect wallet modal
+     */
+    protectWalletModalVisible: PropTypes.func,
+    /**
+     * Hides the modal that contains the component
+     */
+    hideModal: PropTypes.func,
+    /**
+     * redux flag that indicates if the user
+     * completed the seed phrase backup flow
+     */
+    seedphraseBackedUp: PropTypes.bool,
+    /**
+     * Boolean that indicates if the network supports buy
+     */
+    isNetworkBuySupported: PropTypes.bool,
+    /**
+     * Metrics injected by withMetricsAwareness HOC
+     */
+    metrics: PropTypes.object,
+  };
 
-	state = {
-		qrModalVisible: false,
-		buyModalVisible: false
-	};
+  state = {
+    qrModalVisible: false,
+    buyModalVisible: false,
+  };
 
-	/**
-	 * Share current account public address
-	 */
-	onShare = () => {
-		const { selectedAddress } = this.props;
-		Share.open({
-			message: generateUniversalLinkAddress(selectedAddress)
-		})
-			.then(() => {
-				this.props.hideModal();
-				setTimeout(() => this.props.protectWalletModalVisible(), 1000);
-			})
-			.catch(err => {
-				Logger.log('Error while trying to share address', err);
-			});
-		InteractionManager.runAfterInteractions(() => {
-			Analytics.trackEvent(ANALYTICS_EVENT_OPTS.RECEIVE_OPTIONS_SHARE_ADDRESS);
-		});
-	};
+  /**
+   * Share current account public address
+   */
+  onShare = () => {
+    const { selectedAddress } = this.props;
+    Share.open({
+      message: generateUniversalLinkAddress(selectedAddress),
+    })
+      .then(() => {
+        this.props.hideModal();
+        setTimeout(() => this.props.protectWalletModalVisible(), 1000);
+      })
+      .catch((err) => {
+        Logger.log('Error while trying to share address', err);
+      });
 
-	/**
-	 * Shows an alert message with a coming soon message
-	 */
-	onBuy = async () => {
-		const { navigation, toggleReceiveModal, network } = this.props;
-		if (!allowedToBuy(network)) {
-			Alert.alert(strings('fiat_on_ramp.network_not_supported'), strings('fiat_on_ramp.switch_network'));
-		} else {
-			toggleReceiveModal();
-			navigation.navigate('PaymentMethodSelector');
-			InteractionManager.runAfterInteractions(() => {
-				Analytics.trackEvent(ANALYTICS_EVENT_OPTS.WALLET_BUY_ETH);
-			});
-		}
-	};
+    this.props.metrics.trackEvent(
+      this.props.metrics
+        .createEventBuilder(MetaMetricsEvents.RECEIVE_OPTIONS_SHARE_ADDRESS)
+        .build(),
+    );
+  };
 
-	copyAccountToClipboard = async () => {
-		const { selectedAddress } = this.props;
-		Clipboard.setString(selectedAddress);
-		this.props.showAlert({
-			isVisible: true,
-			autodismiss: 1500,
-			content: 'clipboard-alert',
-			data: { msg: strings('account_details.account_copied_to_clipboard') }
-		});
-		if (!this.props.seedphraseBackedUp) {
-			setTimeout(() => this.props.hideModal(), 1000);
-			setTimeout(() => this.props.protectWalletModalVisible(), 1500);
-		}
-	};
+  /**
+   * Shows an alert message with a coming soon message
+   */
+  onBuy = async () => {
+    const { navigation, isNetworkBuySupported } = this.props;
+    if (!isNetworkBuySupported) {
+      Alert.alert(
+        strings('fiat_on_ramp.network_not_supported'),
+        strings('fiat_on_ramp.switch_network'),
+      );
+    } else {
+      navigation.navigate(...createBuyNavigationDetails());
 
-	/**
-	 * Closes QR code modal
-	 */
-	closeQrModal = toggleModal => {
-		this.props.hideModal();
-		toggleModal();
-	};
+      this.props.metrics.trackEvent(
+        this.props.metrics
+          .createEventBuilder(MetaMetricsEvents.BUY_BUTTON_CLICKED)
+          .addProperties({
+            text: 'Buy Native Token',
+            location: 'Receive Modal',
+            chain_id_destination: getDecimalChainId(this.props.chainId),
+          })
+          .build(),
+      );
+    }
+  };
 
-	/**
-	 * Opens QR code modal
-	 */
-	openQrModal = () => {
-		this.setState({ qrModalVisible: true });
-		InteractionManager.runAfterInteractions(() => {
-			Analytics.trackEvent(ANALYTICS_EVENT_OPTS.RECEIVE_OPTIONS_QR_CODE);
-		});
-	};
+  copyAccountToClipboard = async () => {
+    const { selectedAddress } = this.props;
+    ClipboardManager.setString(selectedAddress);
+    this.props.showAlert({
+      isVisible: true,
+      autodismiss: 1500,
+      content: 'clipboard-alert',
+      data: { msg: strings('account_details.account_copied_to_clipboard') },
+    });
+    if (!this.props.seedphraseBackedUp) {
+      setTimeout(() => this.props.hideModal(), 1000);
+      setTimeout(() => this.props.protectWalletModalVisible(), 1500);
+    }
+  };
 
-	onReceive = () => {
-		this.props.toggleReceiveModal();
-		this.props.navigation.navigate('PaymentRequestView', { receiveAsset: this.props.receiveAsset });
-		InteractionManager.runAfterInteractions(() => {
-			Analytics.trackEvent(ANALYTICS_EVENT_OPTS.RECEIVE_OPTIONS_PAYMENT_REQUEST);
-		});
-	};
+  onReceive = () => {
+    this.props.navigation.navigate('PaymentRequestView', {
+      screen: 'PaymentRequest',
+      params: { receiveAsset: this.props.receiveAsset },
+    });
 
-	render() {
-		return (
-			<SafeAreaView style={styles.wrapper}>
-				<ModalDragger />
-				<View style={styles.titleWrapper}>
-					<Text style={styles.title} testID={'receive-request-screen'}>
-						{strings('receive_request.title')}
-					</Text>
-				</View>
-				<View style={styles.body}>
-					<ModalHandler>
-						{({ isVisible, toggleModal }) => (
-							<>
-								<TouchableOpacity
-									style={styles.qrWrapper}
-									// eslint-disable-next-line react/jsx-no-bind
-									onPress={() => {
-										toggleModal();
-										InteractionManager.runAfterInteractions(() => {
-											Analytics.trackEvent(ANALYTICS_EVENT_OPTS.RECEIVE_OPTIONS_QR_CODE);
-										});
-									}}
-								>
-									<QRCode
-										value={`ethereum:${this.props.selectedAddress}`}
-										size={Dimensions.get('window').width / 2}
-									/>
-								</TouchableOpacity>
-								<Modal
-									isVisible={isVisible}
-									onBackdropPress={toggleModal}
-									onBackButtonPress={toggleModal}
-									onSwipeComplete={toggleModal}
-									swipeDirection={'down'}
-									propagateSwipe
-									testID={'qr-modal'}
-								>
-									<AddressQRCode closeQrModal={() => this.closeQrModal(toggleModal)} />
-								</Modal>
-							</>
-						)}
-					</ModalHandler>
+    this.props.metrics.trackEvent(
+      this.props.metrics
+        .createEventBuilder(MetaMetricsEvents.RECEIVE_OPTIONS_PAYMENT_REQUEST)
+        .build(),
+    );
+  };
 
-					<Text>{strings('receive_request.scan_address')}</Text>
+  render() {
+    const theme = this.context || mockTheme;
+    const styles = createStyles(theme);
 
-					<TouchableOpacity
-						style={styles.addressWrapper}
-						onPress={this.copyAccountToClipboard}
-						testID={'account-address'}
-					>
-						<Text>
-							<EthereumAddress address={this.props.selectedAddress} type={'short'} />
-						</Text>
-						<Text style={styles.copyButton} small>
-							{strings('receive_request.copy')}
-						</Text>
-						<TouchableOpacity onPress={this.onShare}>
-							<EvilIcons
-								name={Device.isIos() ? 'share-apple' : 'share-google'}
-								size={25}
-								color={colors.grey600}
-							/>
-						</TouchableOpacity>
-					</TouchableOpacity>
-					<View style={styles.actionRow}>
-						{allowedToBuy(this.props.network) && (
-							<StyledButton type={'blue'} containerStyle={styles.actionButton} onPress={this.onBuy}>
-								{strings('fiat_on_ramp.buy_eth')}
-							</StyledButton>
-						)}
-						<StyledButton
-							type={'normal'}
-							onPress={this.onReceive}
-							containerStyle={styles.actionButton}
-							testID={'request-payment-button'}
-						>
-							{strings('receive_request.request_payment')}
-						</StyledButton>
-					</View>
-				</View>
+    return (
+      <SafeAreaView style={styles.wrapper}>
+        <View style={styles.body}>
+          <View style={styles.qrCode}>
+            <QRCode
+              logo={PNG_MM_LOGO_PATH}
+              logoSize={35}
+              logoMargin={5}
+              value={`ethereum:${this.props.selectedAddress}@${this.props.chainId}`}
+              size={windowWidth / 2}
+            />
+          </View>
 
-				<GlobalAlert />
-			</SafeAreaView>
-		);
-	}
+          <QRAccountDisplay accountAddress={this.props.selectedAddress} />
+
+          <View style={styles.actionRow}>
+            <StyledButton
+              type={'normal'}
+              onPress={this.onReceive}
+              containerStyle={styles.actionButton}
+              testID={RequestPaymentModalSelectorsIDs.REQUEST_BUTTON}
+            >
+              {strings('receive_request.request_payment')}
+            </StyledButton>
+          </View>
+        </View>
+
+        <GlobalAlert />
+      </SafeAreaView>
+    );
+  }
 }
 
-const mapStateToProps = state => ({
-	network: state.engine.backgroundState.NetworkController.network,
-	selectedAddress: state.engine.backgroundState.PreferencesController.selectedAddress,
-	receiveAsset: state.modals.receiveAsset,
-	seedphraseBackedUp: state.user.seedphraseBackedUp
+ReceiveRequest.contextType = ThemeContext;
+
+const mapStateToProps = (state) => ({
+  chainId: selectChainId(state),
+  selectedAddress: selectSelectedInternalAccountFormattedAddress(state),
+  receiveAsset: state.modals.receiveAsset,
+  seedphraseBackedUp: state.user.seedphraseBackedUp,
+  isNetworkBuySupported: isNetworkRampSupported(
+    selectChainId(state),
+    getRampNetworks(state),
+  ),
 });
 
-const mapDispatchToProps = dispatch => ({
-	toggleReceiveModal: () => dispatch(toggleReceiveModal()),
-	showAlert: config => dispatch(showAlert(config)),
-	protectWalletModalVisible: () => dispatch(protectWalletModalVisible())
+const mapDispatchToProps = (dispatch) => ({
+  showAlert: (config) => dispatch(showAlert(config)),
+  protectWalletModalVisible: () => dispatch(protectWalletModalVisible()),
 });
 
 export default connect(
-	mapStateToProps,
-	mapDispatchToProps
-)(ReceiveRequest);
+  mapStateToProps,
+  mapDispatchToProps,
+)(withMetricsAwareness(ReceiveRequest));

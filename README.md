@@ -2,196 +2,162 @@
 
 # MetaMask
 
-[![CircleCI](https://circleci.com/gh/MetaMask/metamask-mobile/tree/develop.svg?style=shield)](https://circleci.com/gh/MetaMask/metamask-mobile/tree/develop)
+[![CI](https://github.com/MetaMask/metamask-mobile/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MetaMask/metamask-mobile/actions/workflows/ci.yml) [![CLA](https://github.com/MetaMask/metamask-mobile/actions/workflows/cla.yml/badge.svg?branch=main)](https://github.com/MetaMask/metamask-mobile/actions/workflows/cla.yml)
 
-MetaMask is a mobile web browser that provides easy access to websites that use the [Ethereum](https://ethereum.org/) blockchain.
+MetaMask is a mobile wallet that provides easy access to websites that use the [Ethereum](https://ethereum.org/) blockchain.
 
 For up to the minute news, follow our [Twitter](https://twitter.com/metamask) or [Medium](https://medium.com/metamask) pages.
 
 To learn how to develop MetaMask-compatible applications, visit our [Developer Docs](https://docs.metamask.io).
 
-## MetaMask Mobile
+To learn how to contribute to the MetaMask codebase, visit our [Contributor Docs](https://github.com/MetaMask/contributor-docs).
 
-### Building Locally
+## Documentation
 
-The code is built using React-Native and running code locally requires a Mac or Linux OS.
-- Install [sentry-cli](https://github.com/getsentry/sentry-cli) tools: `brew install getsentry/tools/sentry-cli`
+- [Architecture](./docs/readme/architecture.md)
+- [Expo Development Environment Setup](./docs/readme/expo-environment.md)
+- [Native Development Environment Setup](./docs/readme/environment.md)
+- [Build Troubleshooting](./docs/readme/troubleshooting.md)
+- [Testing](./docs/readme/testing.md)
+- [Debugging](./docs/readme/debugging.md)
+- [Storybook](./docs/readme/storybook.md)
+- [Miscellaneous](./docs/readme/miscellaneous.md)
 
-- Install [Node.js](https://nodejs.org) **version 10 (latest stable) and yarn@1 (latest)**
-  - If you are using [nvm](https://github.com/creationix/nvm#installation) (recommended) running `nvm use` will automatically choose the right node version for you.
+## Getting started
 
-- Install the shared React Native dependencies (`React Native CLI`, _not_ `Expo CLI`)
-  - [macOS](https://facebook.github.io/react-native/docs/getting-started.html#installing-dependencies-1)
-  - [Linux](https://facebook.github.io/react-native/docs/getting-started.html#installing-dependencies-2)
+### Using Expo (recommended)
 
-- Install [cocoapods](https://guides.cocoapods.org/using/getting-started.html) by running:
+Expo is the fastest way to start developing. With the Expo framework, developers don't need to compile the native side of the application as before, hence no need for any native enviornment setup, developers only need to download a precompiled develpoment build and run the javascript bundler. The development build will then connect with the bundler to load the javascript code.
 
-```bash 
-sudo gem install cocoapods
-```
+#### Expo Environment Setup
 
-- _MetaMask Only:_ Rename the `.*.env.example` files (remove the `.example`) in the root of the project and fill in the appropriate values for each key. Get the values from another MetaMask Mobile developer.
+[Install node, yarn and watchman.](./docs/readme/expo-environment.md)
 
-- Clone this repo and install our dependencies:
+#### Clone the project
 
 ```bash
-git clone ...
+git clone git@github.com:MetaMask/metamask-mobile.git && \
 cd metamask-mobile
-yarn install # this will run a lengthy postinstall flow
-cd ios && pod install && cd .. # install pods for iOS
 ```
 
-- _Non-MetaMask Only:_ In the project root folder run
-```
-  cp .ios.env.example .ios.env && \
-  cp .android.env.example .android.env && \
-  cp .js.env.example .js.env
- ``` 
-- _Non-MetaMask Only:_ Create an account and generate your own API key at [Infura](https://infura.io) in order to connect to main and test nets. Fill `MM_INFURA_PROJECT_ID` in `.js.env`. (App will run without it, but will not be able to connect to actual network.)
+#### Install dependencies
 
-- Then, in one terminal, run:
+```bash
+yarn setup:expo
+```
+
+#### Run the bundler
 
 ```bash
 yarn watch
 ```
 
-#### Android
+#### Download and install the development build
 
-- Install the Android SDK, via [Android Studio](https://developer.android.com/studio).
-  - _MetaMask Only:_ To create production builds, you need to install Google Play Licensing Library via the SDK Manager in Android Studio.
-- Linux only:
-  - Ensure that you have the `secret-tool` binary on your machine.
-    - Part of the [libsecret-tools](https://launchpad.net/ubuntu/bionic/+package/libsecret-tools) package on Debian/Ubuntu based distributions.
-- Install the correct emulator
-  - Follow the instructions at:
-    - [React Native Getting Started - Android](https://facebook.github.io/react-native/docs/getting-started.html#installing-dependencies-1) _(React Native CLI Quickstart -> [your OS] -> Android)_
-    - More details can be found [on the Android Developer site](https://developer.android.com/studio/run/emulator)
-  - You should use the following:
-    - **Android OS Version:** Latest, unless told otherwise
-    - **Device:** Google Pixel 3
-- Finally, start the emulator from Android Studio, and run:
+#### For internal developers
+- Access Runway via Okta and go to the Expo bucket either on the iOS or Android section. From there you will see the available development builds (android-expo-dev-build.apk or ios-expo-dev-build.ipa).
+- For Android:
+  - Install the .apk on your Android device or simulator.
+- For iOS:
+  - Device: you need to have your iPhone registered with our Apple dev account. If you have it, you can install the .ipa on your device.
+  - Simulator: please follow the [native development section](https://github.com/MetaMask/metamask-mobile?tab=readme-ov-file#native-development) and run `yarn setup` and `yarn start:ios` as the .ipa will not work for now, we are working on having an .app that works on simulators.
+
+##### [SOON] For external developers (we are testing the new dev builds and will make them publicly available soon after)
+
+#### Load the app
+
+If on a simulator:
+- use the initial expo screen that appears when starting the development to choose the bundler url
+- OR press "a" for Android or "i" for iOS on the terminal where the bundler is running
+
+If on a physical device:
+- Use the camera app to scan the QR code presented by the bundler running on the terminal
+
+That's it! This will work for any javascript development, if you need to develop or modify native code please see the next section.
+
+### Native Development
+
+If developing or modifying native code or installing any library that introduces or uses native code, it is not possible to use an Expo precompiled development build as you need to compile the native side of the application again. To do so, please follow the steps stated in this section.
+
+#### Native Environment setup
+
+Before running the app for native development, make sure your development environment has all the required tools. Several of these tools (ie Node and Ruby) may require specific versions in order to successfully build the app.
+
+[Setup your development environment](./docs/readme/environment.md)
+
+#### Building the app
+
+**Clone the project**
 
 ```bash
-yarn start:android
+git clone git@github.com:MetaMask/metamask-mobile.git && \
+cd metamask-mobile
 ```
 
-#### iOS
+##### Firebase Messaging Setup
 
-- Install the iOS dependencies
-  - [React Native Getting Started - iOS](https://facebook.github.io/react-native/docs/getting-started.html#installing-dependencies-1) _(React Native CLI Quickstart -> [your OS] -> iOS)_
-    - You do **not** need CocoaPods
-- Install the correct simulator
-  - **iOS OS Version:** Latest, unless told otherwise
-  - **Device:** iPhone 11 Pro
+MetaMask uses Firebase Cloud Messaging (FCM) to enable app communications. To integrate FCM, you’ll need configuration files for both iOS and Android platforms.
+
+###### Internal Contributor instructions
+
+1. Grab the `.js.env` file from 1Password, ask around for the correct vault. This file contains the `GOOGLE_SERVICES_B64_ANDROID` and `GOOGLE_SERVICES_B64_IOS` secrets that will be used to generate the relevant configuration files for IOS/Android.
+2. [Install](./README.md#install-dependencies) and [run & start](./README.md#running-the-app) the application as documented below.
+
+###### External Contributor instructions
+
+As an external contributor, you need to provide your own Firebase project configuration files:
+- **`GoogleService-Info.plist`** (iOS)
+- **`google-services.json`** (Android)
+
+1.	Create a Free Firebase Project
+    - Set up a Firebase project in the Firebase Console.
+    - Configure the project with a client package name matching `io.metamask` (IMPORTANT). 
+2.	Add Configuration Files
+    - Create/Update the `google-services.json` and `GoogleService-Info.plist` files in:
+    - `android/app/google-services.json` (for Android)
+    - `ios/GoogleServices/GoogleService-Info.plist` directory (for iOS)
+3. Create the correct base64 environments variables.
+  
+```bash
+# Generate Android Base64 Version of Google Services
+export GOOGLE_SERVICES_B64_ANDROID="$(base64 -w0 -i ./android/app/google-services.json)" && echo "export GOOGLE_SERVICES_B64_ANDROID=\"$GOOGLE_SERVICES_B64_ANDROID\"" | tee -a .js.env
+
+# Generate IOS Base64 Version of Google Services
+export GOOGLE_SERVICES_B64_IOS="$(base64 -w0 -i ./ios/GoogleServices/GoogleService-Info-example.plist)" && echo "export GOOGLE_SERVICES_B64_IOS=\"$GOOGLE_SERVICES_B64_IOS\"" | tee -a .js.env
+```
+
+[!CAUTION]
+> In case you don't provide your own Firebase project config file or run the steps above, you will face the error `No matching client found for package name 'io.metamask'`.
+
+In case of any doubt, please follow the instructions in the link below to get your Firebase project config file.
+[Firebase Project Quickstart](https://firebaseopensource.com/projects/firebase/quickstart-js/messaging/readme/#getting_started)
+
+##### Install dependencies
+
+```bash
+yarn setup
+```
+
+_Not the usual install command, this will run scripts and a lengthy postinstall flow_
+
+#### Running the app for native development
+
+**Run Metro bundler**
+
+```bash
+yarn watch
+```
+
+_Like a local server for the app_
+
+**Run on a iOS device**
 
 ```bash
 yarn start:ios
 ```
 
-#### Build Troubleshooting
-
-Unfortunately, the build system may fail to pick up local changes, such as installing new NPM packages or `yarn link`ing a dependency.
-If the app is behaving strangely or not picking up your local changes, it may be due to build issues.
-To ensure that you're starting with a clean slate, close all emulators/simulators, stop the `yarn watch` process, and run:
+**Run on an Android device**
 
 ```bash
-yarn clean
-
-# if you're going to `yarn link` any packages,
-# do that here, before the next command
-
-yarn watch:clean
-
-# ...and then, in another terminal
-
-yarn start:ios
-
-# or
-
 yarn start:android
 ```
-
-If `yarn link` fails after going through these steps, try directly `yarn add`ing the local files instead.
-
-### Debugging
-
-First, make sure you have the following running:
-
-- `yarn watch`
-- Your Android emulator or iOS simulator
-- `yarn start:android` or `yarn start:ios`
-
-Next, check that the React Native Debugger is working:
-
-- Open your emulator or simulator, and select `Debug JS Remotely` (or something similar) from its developer menu
-- To open the developer menu:
-  - iOS Simulator: `Cmd + D`
-  - Android Emulator
-    - macOS: `Cmd + M`
-	- Windows, Linux: `Ctrl + M`
-- If it doesn't open automatically, try navigating to this URL in Chrome: http://localhost:8081/debugger-ui/
-- If these steps do not take you to the React Native Debugger, something is wrong
-
-#### Debugging iOS (macOS Only)
-
-For more details, see [this page](https://medium.com/@mattcroak718/debugging-your-iphone-mobile-web-app-using-safari-development-tools-71240657c487).
-
-- You should be able to inspect the mobile app using the console in the React Native Debugger in Chrome
-- To debug a website (dapp) in the browser:
-  - Navigate to the website in the app's browser
-  - Open Safari
-    - Go to: _Preferences -> Advanced_ and select `Show Develop menu in menu bar`
-  - Select `Develop` in the menu bar
-    - Find your simulator in the second section from the top
-    - Select the relevant WebView from the list
-      - The simulator will highlight the WebView when you hover over it in Safari
-
-#### Debugging Android
-
-For more details, see [this page](https://developers.google.com/web/tools/chrome-devtools/remote-debugging/webviews).
-
-- You should be able to inspect the mobile app using the console in the React Native Debugger in Chrome
-- To debug a website (dapp) in the browser:
-  - Navigate to the website in the app's browser
-  - Go to chrome://inspect
-  - Select the relevant WebView under **Remote Target**
-
-#### Miscellaneous
-
-- [Troubleshooting for React Native](https://facebook.github.io/react-native/docs/troubleshooting#content)
-
-### Running Tests
-
-#### Unit Tests
-
-```bash
-yarn test:unit
-```
-
-#### E2E Tests (iOS)
-
-First, [follow the instructions here](https://github.com/wix/AppleSimulatorUtils) to install `applesimutils`. Then:
-
-```bash
-yarn test:e2e:ios
-```
-
-#### E2E Tests (Android)
-
-```bash
-yarn test:e2e:android
-```
-
-### Architecture
-
-To get a better understanding of the internal architecture of this app take a look at [this diagram](https://github.com/MetaMask/metamask-mobile/blob/develop/architecture.svg).
-
-## License
-
-MetaMask Mobile is an exciting development for our team and our ecosystem. We've always been proud to offer the MetaMask browser extension under the MIT open source software license. We are still working through licensing considerations for the mobile application in light of a new delivery medium and our business goals. We are exploring many models, all with a significant open component, but we have not made any final decisions.
-
-The source code for this beta is currently viewable under the below copyright. A license to use the mobile version will be distributed along with the mobile application. We believe it is important for our users to be able inspect and verify our code for trustworthiness, but we also wish to preserve our licensing options until we're certain what is best for MetaMask, our community, and our ecosystem. If you have any questions or comments, we would really appreciate hearing your feedback – you can reach us at mobile@metamask.io
-
-© ConsenSys AG, 2016-2019
-
-You are granted a limited non-exclusive license to inspect and study the code in this repository. There is no associated right to reproduction granted under this license except where reproduction is necessary for inspection and study of the code. You may not otherwise reproduce, distribute, modify or create derivative works of the code without our prior consent. All other rights are expressly reserved.

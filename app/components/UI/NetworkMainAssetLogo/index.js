@@ -1,27 +1,55 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { NetworksChainId } from '@metamask/controllers';
+import { ChainId } from '@metamask/controller-utils';
 import { connect } from 'react-redux';
 import TokenIcon from '../Swaps/components/TokenIcon';
+import {
+  selectChainId,
+  selectTicker,
+} from '../../../selectors/networkController';
 
-function NetworkMainAssetLogo({ chainId, ticker, style, big, biggest }) {
-	if (chainId === NetworksChainId.mainnet) {
-		return <TokenIcon big={big} biggest={biggest} symbol={'ETH'} style={style} />;
-	}
-	return <TokenIcon big={big} biggest={biggest} symbol={ticker} style={style} />;
+function NetworkMainAssetLogo({
+  chainId,
+  ticker,
+  style,
+  big,
+  biggest,
+  testID,
+}) {
+  if (chainId === ChainId.mainnet) {
+    return (
+      <TokenIcon
+        big={big}
+        biggest={biggest}
+        symbol={'ETH'}
+        style={style}
+        testID={testID}
+      />
+    );
+  }
+  return (
+    <TokenIcon
+      big={big}
+      biggest={biggest}
+      symbol={ticker}
+      style={style}
+      testID={testID}
+    />
+  );
 }
 
-const mapStateToProps = state => ({
-	chainId: state.engine.backgroundState.NetworkController.provider.chainId,
-	ticker: state.engine.backgroundState.NetworkController.provider.ticker
+const mapStateToProps = (state) => ({
+  chainId: selectChainId(state),
+  ticker: selectTicker(state),
 });
 
 NetworkMainAssetLogo.propTypes = {
-	chainId: PropTypes.string,
-	ticker: PropTypes.string,
-	style: PropTypes.object,
-	big: PropTypes.bool,
-	biggest: PropTypes.bool
+  chainId: PropTypes.string,
+  ticker: PropTypes.string,
+  style: PropTypes.object,
+  big: PropTypes.bool,
+  biggest: PropTypes.bool,
+  testID: PropTypes.string,
 };
 
 export default connect(mapStateToProps)(NetworkMainAssetLogo);

@@ -1,278 +1,273 @@
 import { InteractionManager } from 'react-native';
-import validUrl from 'valid-url';
-import { NetworksChainId } from '@metamask/controllers';
-import { jsonRpcRequest } from '../../util/jsonRpcRequest';
+import { ChainId } from '@metamask/controller-utils';
 import Engine from '../Engine';
-import { ethErrors } from 'eth-json-rpc-errors';
-import { isPrefixedFormattedHexString, isSafeChainId } from '../../util/networks';
-import URL from 'url-parse';
-import AnalyticsV2 from '../../util/analyticsV2';
+import { providerErrors, rpcErrors } from '@metamask/rpc-errors';
+import { MetaMetricsEvents, MetaMetrics } from '../../core/Analytics';
+import { MetricsEventBuilder } from '../../core/Analytics/MetricsEventBuilder';
+import {
+  selectChainId,
+  selectNetworkConfigurations,
+} from '../../selectors/networkController';
+import { store } from '../../store';
+import checkSafeNetwork from './networkChecker.util';
+import {
+  validateAddEthereumChainParams,
+  validateRpcEndpoint,
+  switchToNetwork,
+} from './lib/ethereum-chain-utils';
+import { getDecimalChainId } from '../../util/networks';
+import { RpcEndpointType } from '@metamask/network-controller';
+
+const waitForInteraction = async () =>
+  new Promise((resolve) => {
+    InteractionManager.runAfterInteractions(() => {
+      resolve();
+    });
+  });
+
+// Utility function to find or add an item in an array and return the updated array and index
+const addOrUpdateIndex = (array, value, comparator) => {
+  const index = array.findIndex(comparator);
+  if (index === -1) {
+    return {
+      updatedArray: [...array, value],
+      index: array.length,
+    };
+  }
+  return { updatedArray: array, index };
+};
 
 const wallet_addEthereumChain = async ({
-	req,
-	res,
-	showAddCustomNetworkDialog,
-	showSwitchCustomNetworkDialog,
-	addCustomNetworkRequest,
-	switchCustomNetworkRequest,
-	setCustomNetworkToSwitch,
-	setShowSwitchCustomNetworkDialog,
-	setCustomNetworkToAdd,
-	setShowAddCustomNetworkDialog
+  req,
+  res,
+  requestUserApproval,
+  analytics,
+  startApprovalFlow,
+  endApprovalFlow,
 }) => {
-	if (showAddCustomNetworkDialog || showSwitchCustomNetworkDialog) return;
-	addCustomNetworkRequest.current = null;
-	switchCustomNetworkRequest.current = null;
+  const {
+    CurrencyRateController,
+    NetworkController,
+    ApprovalController,
+    PermissionController,
+    SelectedNetworkController,
+  } = Engine.context;
 
-	const { PreferencesController, CurrencyRateController, NetworkController } = Engine.context;
+  const { origin } = req;
 
-	if (!req.params?.[0] || typeof req.params[0] !== 'object') {
-		throw ethErrors.rpc.invalidParams({
-			message: `Expected single, object parameter. Received:\n${JSON.stringify(req.params)}`
-		});
-	}
+  const params = validateAddEthereumChainParams(req.params);
+  const {
+    chainId,
+    chainName,
+    firstValidRPCUrl,
+    firstValidBlockExplorerUrl,
+    ticker,
+  } = params;
 
-	const params = req.params[0];
+  //TODO: Remove aurora from default chains in @metamask/controller-utils
+  const actualChains = { ...ChainId, aurora: undefined };
+  if (Object.values(actualChains).find((value) => value === chainId)) {
+    throw rpcErrors.invalidParams(`May not specify default MetaMask chain.`);
+  }
 
-	const { chainId, chainName = null, blockExplorerUrls = null, nativeCurrency = null, rpcUrls } = params;
+  const networkConfigurations = selectNetworkConfigurations(store.getState());
+  const existingEntry = Object.entries(networkConfigurations).find(
+    ([, networkConfiguration]) => networkConfiguration.chainId === chainId,
+  );
+  if (existingEntry) {
+    const [chainId, networkConfiguration] = existingEntry;
+    const currentChainId = selectChainId(store.getState());
 
-	const allowedKeys = {
-		chainId: true,
-		chainName: true,
-		blockExplorerUrls: true,
-		nativeCurrency: true,
-		rpcUrls: true
-	};
+    // A network for this chain id already exists.
+    // Update it with any new information.
+    const clonedNetwork = { ...networkConfiguration };
 
-	const extraKeys = Object.keys(params).filter(key => !allowedKeys[key]);
-	if (extraKeys.length) {
-		throw ethErrors.rpc.invalidParams(
-			`Received unexpected keys on object parameter. Unsupported keys:\n${extraKeys}`
-		);
-	}
+    // Use the addOrUpdateIndex utility for rpcEndpoints
+    const rpcResult = addOrUpdateIndex(
+      clonedNetwork.rpcEndpoints,
+      {
+        url: firstValidRPCUrl,
+        type: RpcEndpointType.Custom,
+        name: chainName,
+      },
+      (endpoint) => endpoint.url === firstValidRPCUrl,
+    );
 
-	const firstValidRPCUrl = Array.isArray(rpcUrls) ? rpcUrls.find(rpcUrl => validUrl.isHttpsUri(rpcUrl)) : null;
+    clonedNetwork.rpcEndpoints = rpcResult.updatedArray;
+    clonedNetwork.defaultRpcEndpointIndex = rpcResult.index;
 
-	const firstValidBlockExplorerUrl =
-		blockExplorerUrls !== null && Array.isArray(blockExplorerUrls)
-			? blockExplorerUrls.find(blockExplorerUrl => validUrl.isHttpsUri(blockExplorerUrl))
-			: null;
+    // Use the addOrUpdateIndex utility for blockExplorerUrls
+    const blockExplorerResult = addOrUpdateIndex(
+      clonedNetwork.blockExplorerUrls,
+      firstValidBlockExplorerUrl,
+      (url) => url === firstValidBlockExplorerUrl,
+    );
 
-	if (!firstValidRPCUrl) {
-		throw ethErrors.rpc.invalidParams(
-			`Expected an array with at least one valid string HTTPS url 'rpcUrls', Received:\n${rpcUrls}`
-		);
-	}
+    clonedNetwork.blockExplorerUrls = blockExplorerResult.updatedArray;
+    clonedNetwork.defaultBlockExplorerUrlIndex = blockExplorerResult.index;
 
-	if (blockExplorerUrls !== null && !firstValidBlockExplorerUrl) {
-		throw ethErrors.rpc.invalidParams(
-			`Expected null or array with at least one valid string HTTPS URL 'blockExplorerUrl'. Received: ${blockExplorerUrls}`
-		);
-	}
+    await NetworkController.updateNetwork(
+      clonedNetwork.chainId,
+      clonedNetwork,
+      currentChainId === chainId
+        ? {
+            replacementSelectedRpcEndpointIndex:
+              clonedNetwork.defaultRpcEndpointIndex,
+          }
+        : undefined,
+    );
 
-	const _chainId = typeof chainId === 'string' && chainId.toLowerCase();
+    const analyticsParams = {
+      chain_id: getDecimalChainId(chainId),
+      source: 'Custom Network API',
+      symbol: networkConfiguration.ticker,
+      ...analytics,
+    };
 
-	if (!isPrefixedFormattedHexString(_chainId)) {
-		throw ethErrors.rpc.invalidParams(
-			`Expected 0x-prefixed, unpadded, non-zero hexadecimal string 'chainId'. Received:\n${chainId}`
-		);
-	}
+    const { networkClientId } =
+      networkConfiguration.rpcEndpoints[
+        networkConfiguration.defaultRpcEndpointIndex
+      ];
 
-	if (!isSafeChainId(parseInt(_chainId, 16))) {
-		throw ethErrors.rpc.invalidParams(
-			`Invalid chain ID "${_chainId}": numerical value greater than max safe value. Received:\n${chainId}`
-		);
-	}
+    const network = [networkClientId, clonedNetwork];
+    await switchToNetwork({
+      network,
+      chainId,
+      controllers: {
+        CurrencyRateController,
+        NetworkController,
+        PermissionController,
+        SelectedNetworkController,
+      },
+      requestUserApproval,
+      analytics,
+      origin,
+      isAddNetworkFlow: true,
+    });
 
-	const chainIdDecimal = parseInt(_chainId, 16).toString(10);
+    MetaMetrics.getInstance().trackEvent(
+      MetricsEventBuilder.createEventBuilder(MetaMetricsEvents.NETWORK_SWITCHED)
+        .addProperties(analyticsParams)
+        .build(),
+    );
 
-	if (NetworksChainId[chainIdDecimal]) {
-		throw ethErrors.rpc.invalidParams(`May not specify default MetaMask chain.`);
-	}
+    res.result = null;
+    return;
+  }
+  await validateRpcEndpoint(firstValidRPCUrl, chainId);
+  const requestData = {
+    chainId,
+    blockExplorerUrl: firstValidBlockExplorerUrl,
+    chainName,
+    rpcUrl: firstValidRPCUrl,
+    ticker,
+  };
 
-	const frequentRpcList = PreferencesController.state.frequentRpcList;
-	const existingNetwork = frequentRpcList.find(rpc => rpc.chainId === chainIdDecimal);
+  const alerts = await checkSafeNetwork(
+    getDecimalChainId(chainId),
+    requestData.rpcUrl,
+    requestData.chainName,
+    requestData.ticker,
+  );
+  requestData.alerts = alerts;
 
-	if (existingNetwork) {
-		const currentChainId = NetworkController.state.provider.chainId;
-		if (currentChainId === chainIdDecimal) {
-			res.result = null;
-			return;
-		}
+  MetaMetrics.getInstance().trackEvent(
+    MetricsEventBuilder.createEventBuilder(MetaMetricsEvents.NETWORK_REQUESTED)
+      .addProperties({
+        chain_id: getDecimalChainId(chainId),
+        source: 'Custom Network API',
+        symbol: ticker,
+        ...analytics,
+      })
+      .build(),
+  );
+  // Remove all existing approvals, including other add network requests.
+  ApprovalController.clear(providerErrors.userRejectedRequest());
 
-		setCustomNetworkToSwitch({
-			rpcUrl: existingNetwork.rpcUrl,
-			chainId: _chainId,
-			chainName: existingNetwork.nickname,
-			ticker: existingNetwork.ticker
-		});
-		setShowSwitchCustomNetworkDialog('switch');
+  // If existing approval request was an add network request, wait for
+  // it to be rejected and for the corresponding approval flow to be ended.
+  await waitForInteraction();
+  const { id: approvalFlowId } = startApprovalFlow();
 
-		const switchCustomNetworkApprove = await new Promise((resolve, reject) => {
-			switchCustomNetworkRequest.current = { resolve, reject };
-		});
+  try {
+    try {
+      await requestUserApproval({
+        type: 'ADD_ETHEREUM_CHAIN',
+        requestData,
+      });
+    } catch (error) {
+      MetaMetrics.getInstance().trackEvent(
+        MetricsEventBuilder.createEventBuilder(
+          MetaMetricsEvents.NETWORK_REQUEST_REJECTED,
+        )
+          .addProperties({
+            chain_id: getDecimalChainId(chainId),
+            source: 'Custom Network API',
+            symbol: ticker,
+            ...analytics,
+          })
+          .build(),
+      );
+      throw providerErrors.userRejectedRequest();
+    }
+    const networkConfiguration = await NetworkController.addNetwork({
+      chainId,
+      blockExplorerUrls: [firstValidBlockExplorerUrl],
+      defaultRpcEndpointIndex: 0,
+      defaultBlockExplorerUrlIndex: 0,
+      name: chainName,
+      nativeCurrency: ticker,
+      rpcEndpoints: [
+        {
+          url: firstValidRPCUrl,
+          name: chainName,
+          type: RpcEndpointType.Custom,
+        },
+      ],
+    });
 
-		const analyticsParams = {
-			rpc_url: existingNetwork?.rpcUrl,
-			chain_id: _chainId,
-			source: 'Custom Network API',
-			symbol: existingNetwork?.ticker,
-			block_explorer_url: existingNetwork?.blockExplorerUrl,
-			network_name: 'rpc'
-		};
+    MetaMetrics.getInstance().trackEvent(
+      MetricsEventBuilder.createEventBuilder(MetaMetricsEvents.NETWORK_ADDED)
+        .addProperties({
+          chain_id: getDecimalChainId(chainId),
+          source: 'Custom Network API',
+          symbol: ticker,
+          ...analytics,
+        })
+        .build(),
+    );
 
-		if (!switchCustomNetworkApprove) {
-			AnalyticsV2.trackEvent(AnalyticsV2.ANALYTICS_EVENTS.NETWORK_REQUEST_REJECTED, analyticsParams);
-			throw ethErrors.provider.userRejectedRequest();
-		}
+    const { networkClientId } =
+      networkConfiguration?.rpcEndpoints?.[
+        networkConfiguration.defaultRpcEndpointIndex
+      ] ?? {};
 
-		CurrencyRateController.setNativeCurrency(existingNetwork.ticker);
-		NetworkController.setRpcTarget(
-			existingNetwork.rpcUrl,
-			chainIdDecimal,
-			existingNetwork.ticker,
-			existingNetwork.nickname
-		);
+    const network = [networkClientId, networkConfiguration];
+    const analyticsParams = await switchToNetwork({
+      network,
+      chainId,
+      controllers: {
+        CurrencyRateController,
+        NetworkController,
+        PermissionController,
+        SelectedNetworkController,
+      },
+      requestUserApproval,
+      analytics,
+      origin,
+      isAddNetworkFlow: true,
+    });
 
-		AnalyticsV2.trackEvent(AnalyticsV2.ANALYTICS_EVENTS.NETWORK_SWITCHED, analyticsParams);
+    MetaMetrics.getInstance().trackEvent(
+      MetricsEventBuilder.createEventBuilder(MetaMetricsEvents.NETWORK_SWITCHED)
+        .addProperties(analyticsParams)
+        .build(),
+    );
+  } finally {
+    endApprovalFlow({ id: approvalFlowId });
+  }
 
-		res.result = null;
-		return;
-	}
-
-	let endpointChainId;
-
-	try {
-		endpointChainId = await jsonRpcRequest(firstValidRPCUrl, 'eth_chainId');
-	} catch (err) {
-		throw ethErrors.rpc.internal({
-			message: `Request for method 'eth_chainId on ${firstValidRPCUrl} failed`,
-			data: { networkErr: err }
-		});
-	}
-
-	if (_chainId !== endpointChainId) {
-		throw ethErrors.rpc.invalidParams({
-			message: `Chain ID returned by RPC URL ${firstValidRPCUrl} does not match ${_chainId}`,
-			data: { chainId: endpointChainId }
-		});
-	}
-
-	if (typeof chainName !== 'string' || !chainName) {
-		throw ethErrors.rpc.invalidParams({
-			message: `Expected non-empty string 'chainName'. Received:\n${chainName}`
-		});
-	}
-	const _chainName = chainName.length > 100 ? chainName.substring(0, 100) : chainName;
-
-	if (nativeCurrency !== null) {
-		if (typeof nativeCurrency !== 'object' || Array.isArray(nativeCurrency)) {
-			throw ethErrors.rpc.invalidParams({
-				message: `Expected null or object 'nativeCurrency'. Received:\n${nativeCurrency}`
-			});
-		}
-		if (nativeCurrency.decimals !== 18) {
-			throw ethErrors.rpc.invalidParams({
-				message: `Expected the number 18 for 'nativeCurrency.decimals' when 'nativeCurrency' is provided. Received: ${
-					nativeCurrency.decimals
-				}`
-			});
-		}
-
-		if (!nativeCurrency.symbol || typeof nativeCurrency.symbol !== 'string') {
-			throw ethErrors.rpc.invalidParams({
-				message: `Expected a string 'nativeCurrency.symbol'. Received: ${nativeCurrency.symbol}`
-			});
-		}
-	}
-	const ticker = nativeCurrency?.symbol || 'ETH';
-
-	if (typeof ticker !== 'string' || ticker.length < 2 || ticker.length > 6) {
-		throw ethErrors.rpc.invalidParams({
-			message: `Expected 2-6 character string 'nativeCurrency.symbol'. Received:\n${ticker}`
-		});
-	}
-
-	const requestData = {
-		chainId: _chainId,
-		blockExplorerUrl: firstValidBlockExplorerUrl,
-		chainName: _chainName,
-		rpcUrl: firstValidRPCUrl,
-		ticker
-	};
-
-	let alert = null;
-	const safeChainsListRequest = await fetch('https://chainid.network/chains.json');
-	const safeChainsList = await safeChainsListRequest.json();
-	const matchedChain = safeChainsList.find(chain => chain.chainId.toString() === chainIdDecimal);
-	let validated = !!matchedChain;
-
-	if (matchedChain) {
-		if (
-			matchedChain.nativeCurrency?.decimals !== 18 ||
-			matchedChain.name.toLowerCase() !== requestData.chainName.toLowerCase() ||
-			matchedChain.nativeCurrency?.symbol !== requestData.ticker
-		) {
-			validated = false;
-		}
-
-		const { origin } = new URL(requestData.rpcUrl);
-		if (!matchedChain.rpc.map(rpc => new URL(rpc).origin).includes(origin)) {
-			validated = false;
-		}
-	}
-
-	if (!matchedChain) {
-		alert = 'UNRECOGNIZED_CHAIN';
-	} else if (!validated) {
-		alert = 'INVALID_CHAIN';
-	}
-	requestData.alert = alert;
-
-	const analyticsParamsAdd = {
-		rpc_url: firstValidRPCUrl,
-		chain_id: chainIdDecimal,
-		source: 'Custom Network API',
-		symbol: ticker,
-		block_explorer_url: firstValidBlockExplorerUrl,
-		network_name: 'rpc'
-	};
-
-	AnalyticsV2.trackEvent(AnalyticsV2.ANALYTICS_EVENTS.NETWORK_REQUESTED, analyticsParamsAdd);
-
-	setCustomNetworkToAdd(requestData);
-	setShowAddCustomNetworkDialog(true);
-
-	const addCustomNetworkApprove = await new Promise((resolve, reject) => {
-		addCustomNetworkRequest.current = { resolve, reject };
-	});
-
-	if (!addCustomNetworkApprove) {
-		AnalyticsV2.trackEvent(AnalyticsV2.ANALYTICS_EVENTS.NETWORK_REQUEST_REJECTED, analyticsParamsAdd);
-		throw ethErrors.provider.userRejectedRequest();
-	}
-
-	PreferencesController.addToFrequentRpcList(firstValidRPCUrl, chainIdDecimal, ticker, _chainName, {
-		blockExplorerUrl: firstValidBlockExplorerUrl
-	});
-
-	AnalyticsV2.trackEvent(AnalyticsV2.ANALYTICS_EVENTS.NETWORK_ADDED, analyticsParamsAdd);
-
-	InteractionManager.runAfterInteractions(() => {
-		setCustomNetworkToSwitch(requestData);
-		setShowSwitchCustomNetworkDialog('new');
-	});
-
-	const switchCustomNetworkApprove = await new Promise((resolve, reject) => {
-		switchCustomNetworkRequest.current = { resolve, reject };
-	});
-
-	if (!switchCustomNetworkApprove) throw ethErrors.provider.userRejectedRequest();
-
-	CurrencyRateController.setNativeCurrency(ticker);
-	NetworkController.setRpcTarget(firstValidRPCUrl, chainIdDecimal, ticker, _chainName);
-
-	res.result = null;
+  res.result = null;
 };
 
 export default wallet_addEthereumChain;

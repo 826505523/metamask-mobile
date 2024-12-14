@@ -1,62 +1,62 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
 import { StyleSheet, View } from 'react-native';
 import AssetIcon from '../AssetIcon';
 import Identicon from '../Identicon';
-import contractMap from '@metamask/contract-metadata';
-import { toChecksumAddress } from 'ethereumjs-util';
-import { connect } from 'react-redux';
+import isUrl from 'is-url';
+import { connect, useSelector } from 'react-redux';
+import { selectTokenList } from '../../../selectors/tokenListController';
+import { selectIsIpfsGatewayEnabled } from '../../../selectors/preferencesController';
+import { isIPFSUri } from '../../../util/general';
 
 const styles = StyleSheet.create({
-	itemLogoWrapper: {
-		width: 50,
-		height: 50
-	},
-	roundImage: {
-		overflow: 'hidden',
-		borderRadius: 25
-	}
+  itemLogoWrapper: {
+    width: 50,
+    height: 50,
+  },
+  roundImage: {
+    overflow: 'hidden',
+    borderRadius: 25,
+  },
 });
 
-export function TokenImage({ asset, containerStyle, iconStyle, logoDefined, swapsTokens }) {
-	const completeAsset = useMemo(() => {
-		if (!logoDefined && !asset.logo) {
-			const checksumAddress = toChecksumAddress(asset.address);
-			if (checksumAddress in contractMap) {
-				asset.logo = contractMap[checksumAddress].logo;
-			} else {
-				const swapAsset = swapsTokens?.find(({ address }) => asset.address.toLowerCase() === address);
-				asset.image = swapAsset?.iconUrl;
-			}
-		}
-		return asset;
-	}, [asset, logoDefined, swapsTokens]);
+const TokenImage = ({ asset, containerStyle, iconStyle, tokenList }) => {
+  const isIpfsGatewayEnabled = useSelector(selectIsIpfsGatewayEnabled);
 
-	return (
-		<View style={[styles.itemLogoWrapper, containerStyle, asset.logo || asset.image ? {} : styles.roundImage]}>
-			{asset.logo || asset.image ? (
-				<AssetIcon
-					watchedAsset={asset.image !== undefined}
-					logo={completeAsset.image || completeAsset.logo}
-					customStyle={iconStyle}
-				/>
-			) : (
-				<Identicon address={asset.address} customStyle={iconStyle} />
-			)}
-		</View>
-	);
-}
+  const assetImage = isUrl(asset?.image) ? asset.image : null;
+  const iconUrl =
+    assetImage ||
+    tokenList[asset?.address]?.iconUrl ||
+    tokenList[asset?.address?.toLowerCase()]?.iconUrl ||
+    '';
 
-TokenImage.propTypes = {
-	asset: PropTypes.object,
-	containerStyle: PropTypes.object,
-	iconStyle: PropTypes.object,
-	logoDefined: PropTypes.bool,
-	swapsTokens: PropTypes.arrayOf(PropTypes.object)
+  const isIpfsDisabledAndUriIsIpfs =
+    !isIpfsGatewayEnabled && isIPFSUri(iconUrl);
+
+  return (
+    <View style={[styles.itemLogoWrapper, containerStyle, styles.roundImage]}>
+      {iconUrl || !isIpfsDisabledAndUriIsIpfs ? (
+        <AssetIcon
+          address={asset?.address}
+          logo={iconUrl}
+          customStyle={iconStyle}
+        />
+      ) : (
+        <Identicon address={asset?.address} customStyle={iconStyle} />
+      )}
+    </View>
+  );
 };
 
-const mapStateToProps = state => ({
-	swapsTokens: state.engine.backgroundState.SwapsController.tokens
+TokenImage.propTypes = {
+  asset: PropTypes.object,
+  containerStyle: PropTypes.object,
+  iconStyle: PropTypes.object,
+  tokenList: PropTypes.object,
+};
+
+const mapStateToProps = (state) => ({
+  tokenList: selectTokenList(state),
 });
 
 export default connect(mapStateToProps)(TokenImage);

@@ -1,7 +1,40 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Asset should render correctly 1`] = `
-<Connect(Asset)
-  transactions={Array []}
-/>
+<View
+  style={
+    {
+      "backgroundColor": "#ffffff",
+      "flex": 1,
+    }
+  }
+>
+  <View
+    style={
+      {
+        "backgroundColor": "#ffffff",
+        "flex": 1,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "justifyContent": "center",
+          "paddingBottom": 24,
+        }
+      }
+    >
+      <ActivityIndicator
+        size="small"
+        style={
+          {
+            "alignSelf": "center",
+          }
+        }
+      />
+    </View>
+  </View>
+</View>
 `;

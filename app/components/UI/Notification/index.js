@@ -1,126 +1,128 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
-import Animated, { Easing } from 'react-native-reanimated';
-import { removeCurrentNotification, hideCurrentNotification } from '../../../actions/notification';
-import notificationTypes from '../../../util/notifications';
+import { useNavigationState } from '@react-navigation/native';
+import {
+  removeCurrentNotification,
+  hideCurrentNotification,
+} from '../../../actions/notification';
+import { NotificationTypes } from '../../../util/notifications';
 import TransactionNotification from './TransactionNotification';
 import SimpleNotification from './SimpleNotification';
 import { currentNotificationSelector } from '../../../reducers/notification';
 
-const { TRANSACTION, SIMPLE } = notificationTypes;
+import { findRouteNameFromNavigatorState } from '../../../util/general';
+import usePrevious from '../../hooks/usePrevious';
+import {
+  useSharedValue,
+  withTiming,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
+
+const { TRANSACTION, SIMPLE } = NotificationTypes;
 
 const BROWSER_ROUTE = 'BrowserView';
 
-function Notification(props) {
-	const {
-		currentNotification,
-		currentNotificationIsVisible,
-		navigation,
-		hideCurrentNotification,
-		removeCurrentNotification
-	} = props;
+function Notification({
+  currentNotification,
+  currentNotificationIsVisible,
+  hideCurrentNotification,
+  removeCurrentNotification,
+}) {
+  const notificationAnimated = useSharedValue(200);
+  const routes = useNavigationState((state) => state.routes);
 
-	const notificationAnimated = useRef(new Animated.Value(200)).current;
+  const prevNotificationIsVisible = usePrevious(currentNotificationIsVisible);
 
-	const usePrevious = value => {
-		const ref = useRef();
-		useEffect(() => {
-			ref.current = value;
-		});
-		return ref.current;
-	};
+  const animatedTimingStart = useCallback((animatedRef, toValue, callback) => {
+    animatedRef.value = withTiming(
+      toValue,
+      { duration: 500, easing: Easing.linear },
+      () => callback && runOnJS(callback)(),
+    );
+  }, []);
 
-	const prevNotificationIsVisible = usePrevious(currentNotificationIsVisible);
+  const isInBrowserView = useMemo(
+    () => findRouteNameFromNavigatorState(routes) === BROWSER_ROUTE,
+    [routes],
+  );
 
-	const animatedTimingStart = useCallback((animatedRef, toValue) => {
-		Animated.timing(animatedRef, {
-			toValue,
-			duration: 500,
-			easing: Easing.linear,
-			useNativeDriver: true
-		}).start();
-	}, []);
+  useEffect(
+    () => () => {
+      animatedTimingStart(notificationAnimated, 200, removeCurrentNotification);
+      hideCurrentNotification();
+    },
+    [
+      notificationAnimated,
+      animatedTimingStart,
+      hideCurrentNotification,
+      removeCurrentNotification,
+    ],
+  );
 
-	const isInBrowserView = useMemo(() => {
-		const routes = navigation.state.routes;
-		let route = routes[routes.length - 1];
-		while (route.index !== undefined) route = route.routes[route.index];
-		return route?.routeName === BROWSER_ROUTE;
-	}, [navigation.state]);
+  useEffect(() => {
+    if (!prevNotificationIsVisible && currentNotificationIsVisible) {
+      animatedTimingStart(notificationAnimated, 0);
+      hideCurrentNotification();
+      setTimeout(() => {
+        animatedTimingStart(
+          notificationAnimated,
+          200,
+          removeCurrentNotification,
+        );
+      }, currentNotification.autodismiss || 5000);
+    }
+  }, [
+    animatedTimingStart,
+    hideCurrentNotification,
+    removeCurrentNotification,
+    currentNotificationIsVisible,
+    prevNotificationIsVisible,
+    currentNotification.autodismiss,
+    notificationAnimated,
+  ]);
 
-	useEffect(
-		() => () => {
-			animatedTimingStart(notificationAnimated, 200);
-			hideCurrentNotification();
-			removeCurrentNotification();
-		},
-		[notificationAnimated, animatedTimingStart, hideCurrentNotification, removeCurrentNotification]
-	);
-
-	useEffect(() => {
-		if (!prevNotificationIsVisible && currentNotificationIsVisible) {
-			animatedTimingStart(notificationAnimated, 0);
-			setTimeout(() => {
-				animatedTimingStart(notificationAnimated, 200);
-				hideCurrentNotification();
-				setTimeout(() => removeCurrentNotification(), 500);
-			}, currentNotification.autodismiss || 5000);
-		}
-	}, [
-		animatedTimingStart,
-		hideCurrentNotification,
-		removeCurrentNotification,
-		currentNotificationIsVisible,
-		prevNotificationIsVisible,
-		currentNotification.autodismiss,
-		notificationAnimated
-	]);
-
-	if (!currentNotification?.type) return null;
-	if (currentNotification.type === TRANSACTION)
-		return (
-			<TransactionNotification
-				onClose={hideCurrentNotification}
-				isInBrowserView={isInBrowserView}
-				notificationAnimated={notificationAnimated}
-				animatedTimingStart={animatedTimingStart}
-				currentNotification={currentNotification}
-			/>
-		);
-	if (currentNotification.type === SIMPLE)
-		return (
-			<SimpleNotification
-				isInBrowserView={isInBrowserView}
-				notificationAnimated={notificationAnimated}
-				currentNotification={currentNotification}
-			/>
-		);
-	return null;
+  if (!currentNotification?.type) return null;
+  if (currentNotification.type === TRANSACTION)
+    return (
+      <TransactionNotification
+        onClose={hideCurrentNotification}
+        isInBrowserView={isInBrowserView}
+        notificationAnimated={notificationAnimated}
+        animatedTimingStart={animatedTimingStart}
+        currentNotification={currentNotification}
+      />
+    );
+  if (currentNotification.type === SIMPLE)
+    return (
+      <SimpleNotification
+        isInBrowserView={isInBrowserView}
+        notificationAnimated={notificationAnimated}
+        currentNotification={currentNotification}
+      />
+    );
+  return null;
 }
 
 Notification.propTypes = {
-	navigation: PropTypes.object,
-	currentNotification: PropTypes.object,
-	currentNotificationIsVisible: PropTypes.bool,
-	hideCurrentNotification: PropTypes.func,
-	removeCurrentNotification: PropTypes.func
+  currentNotification: PropTypes.object,
+  currentNotificationIsVisible: PropTypes.bool,
+  hideCurrentNotification: PropTypes.func,
+  removeCurrentNotification: PropTypes.func,
 };
 
-const mapStateToProps = state => {
-	const currentNotification = currentNotificationSelector(state.notification);
-	return {
-		currentNotification,
-		currentNotificationIsVisible: Boolean(currentNotification.isVisible)
-	};
+const mapStateToProps = (state) => {
+  const currentNotification = currentNotificationSelector(state.notification);
+  return {
+    currentNotification,
+    currentNotificationIsVisible: Boolean(currentNotification.isVisible),
+  };
 };
 
-const mapDispatchToProps = dispatch => ({
-	removeCurrentNotification: () => dispatch(removeCurrentNotification()),
-	hideCurrentNotification: () => dispatch(hideCurrentNotification())
+const mapDispatchToProps = (dispatch) => ({
+  removeCurrentNotification: () => dispatch(removeCurrentNotification()),
+  hideCurrentNotification: () => dispatch(hideCurrentNotification()),
 });
 
-export default connect(
-	mapStateToProps,
-	mapDispatchToProps
-)(Notification);
+export default connect(mapStateToProps, mapDispatchToProps)(Notification);

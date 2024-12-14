@@ -1,279 +1,463 @@
-import React, { PureComponent } from 'react';
-import { connect } from 'react-redux';
-import { View, Dimensions } from 'react-native';
 import PropTypes from 'prop-types';
-import { createNewTab, closeAllTabs, closeTab, setActiveTab, updateTab } from '../../../actions/browser';
-import Tabs from '../../UI/Tabs';
-import { getBrowserViewNavbarOptions } from '../../UI/Navbar';
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+} from 'react';
+import { Dimensions, Platform, View } from 'react-native';
 import { captureScreen } from 'react-native-view-shot';
-import Logger from '../../../util/Logger';
-import Device from '../../../util/Device';
-import BrowserTab from '../BrowserTab';
+import { connect, useSelector } from 'react-redux';
+import { strings } from '../../../../locales/i18n';
+import { BrowserViewSelectorsIDs } from '../../../../e2e/selectors/Browser/BrowserView.selectors';
+import {
+  closeAllTabs,
+  closeTab,
+  createNewTab,
+  setActiveTab,
+  updateTab,
+} from '../../../actions/browser';
+import { AvatarAccountType } from '../../../component-library/components/Avatars/Avatar/variants/AvatarAccount';
+import {
+  ToastContext,
+  ToastVariants,
+} from '../../../component-library/components/Toast';
+import { useAccounts } from '../../../components/hooks/useAccounts';
+import { MetaMetricsEvents } from '../../../core/Analytics';
 import AppConstants from '../../../core/AppConstants';
+import {
+  getPermittedAccounts,
+  getPermittedAccountsByHostname,
+} from '../../../core/Permissions';
+import { selectAccountsLength } from '../../../selectors/accountTrackerController';
 import { baseStyles } from '../../../styles/common';
+import Logger from '../../../util/Logger';
+import getAccountNameWithENS from '../../../util/accounts';
+import Device from '../../../util/device';
+import { useTheme } from '../../../util/theme';
+import Tabs from '../../UI/Tabs';
+import BrowserTab from '../BrowserTab';
+
+import { isEqual } from 'lodash';
+import URL from 'url-parse';
+import { useMetrics } from '../../../components/hooks/useMetrics';
+import {
+  selectNetworkConfigurations,
+  selectChainId,
+} from '../../../selectors/networkController';
+import { getBrowserViewNavbarOptions } from '../../UI/Navbar';
+import { selectPermissionControllerState } from '../../../selectors/snaps/permissionController';
+import Engine from '../../../core/Engine';
+import Routes from '../../../constants/navigation/Routes';
 
 const margin = 16;
 const THUMB_WIDTH = Dimensions.get('window').width / 2 - margin * 2;
 const THUMB_HEIGHT = Device.isIos() ? THUMB_WIDTH * 1.81 : THUMB_WIDTH * 1.48;
 
 /**
- * PureComponent that wraps all the browser
+ * Component that wraps all the browser
  * individual tabs and the tabs view
  */
-class Browser extends PureComponent {
-	static propTypes = {
-		/**
-		 * react-navigation object used to switch between screens
-		 */
-		navigation: PropTypes.object,
-		/**
-		 * Function to create a new tab
-		 */
-		createNewTab: PropTypes.func,
-		/**
-		 * Function to close all the existing tabs
-		 */
-		closeAllTabs: PropTypes.func,
-		/**
-		 * Function to close a specific tab
-		 */
-		closeTab: PropTypes.func,
-		/**
-		 * Function to set the active tab
-		 */
-		setActiveTab: PropTypes.func,
-		/**
-		 * Function to set the update the url of a tab
-		 */
-		updateTab: PropTypes.func,
-		/**
-		 * Array of tabs
-		 */
-		tabs: PropTypes.array,
-		/**
-		 * ID of the active tab
-		 */
-		activeTab: PropTypes.number
-	};
-	static navigationOptions = ({ navigation }) => getBrowserViewNavbarOptions(navigation);
+export const Browser = (props) => {
+  const {
+    route,
+    navigation,
+    createNewTab,
+    closeAllTabs: triggerCloseAllTabs,
+    closeTab: triggerCloseTab,
+    setActiveTab,
+    updateTab,
+    activeTab: activeTabId,
+    tabs,
+    accountsLength,
+    chainId,
+  } = props;
+  const previousTabs = useRef(null);
+  const { colors } = useTheme();
+  const { trackEvent, createEventBuilder } = useMetrics();
+  const { toastRef } = useContext(ToastContext);
+  const browserUrl = props.route?.params?.url;
+  const linkType = props.route?.params?.linkType;
+  const prevSiteHostname = useRef(browserUrl);
+  const { accounts, ensByAccountAddress } = useAccounts();
+  const accountAvatarType = useSelector((state) =>
+    state.settings.useBlockieIcon
+      ? AvatarAccountType.Blockies
+      : AvatarAccountType.JazzIcon,
+  );
 
-	constructor(props) {
-		super(props);
+  // networkConfigurations has all the rpcs added by the user. We add 1 more to account the Ethereum Main Network
+  const nonTestnetNetworks =
+    Object.keys(props.networkConfigurations).length + 1;
 
-		if (!props.tabs.length) {
-			this.newTab();
-		}
-	}
-	componentDidMount() {
-		const activeTab = this.props.tabs.find(tab => tab.id === this.props.activeTab);
-		if (activeTab) {
-			this.switchToTab(activeTab);
-		} else {
-			this.props.tabs.length > 0 && this.switchToTab(this.props.tabs[0]);
-		}
+  const activeTab = tabs.find((tab) => tab.id === activeTabId);
+  const permittedAccountsList = useSelector((state) => {
+    if (!activeTab) return [];
 
-		const currentUrl = this.props.navigation.getParam('newTabUrl', null);
-		if (currentUrl) this.goToNewTab(currentUrl);
-	}
+    const permissionsControllerState = selectPermissionControllerState(state);
+    const hostname = new URL(activeTab.url).hostname;
+    const permittedAcc = getPermittedAccountsByHostname(
+      permissionsControllerState,
+      hostname,
+    );
+    return permittedAcc;
+  }, isEqual);
 
-	componentDidUpdate(prevProps) {
-		const prevNavigation = prevProps.navigation;
-		const { navigation } = this.props;
+  const handleRightTopButtonAnalyticsEvent = () => {
+    trackEvent(
+      createEventBuilder(MetaMetricsEvents.OPEN_DAPP_PERMISSIONS)
+        .addProperties({
+          number_of_accounts: accountsLength,
+          number_of_accounts_connected: permittedAccountsList.length,
+          number_of_networks: nonTestnetNetworks,
+        })
+        .build(),
+    );
+  };
 
-		if (prevNavigation && navigation) {
-			const prevUrl = prevNavigation.getParam('newTabUrl', null);
-			const currentUrl = navigation.getParam('newTabUrl', null);
+  useEffect(
+    () =>
+      navigation.setOptions(
+        getBrowserViewNavbarOptions(
+          route,
+          colors,
+          handleRightTopButtonAnalyticsEvent,
+          !route.params?.showTabs,
+        ),
+      ),
+    /* eslint-disable-next-line */
+    [navigation, route, colors],
+  );
 
-			if (currentUrl && prevUrl !== currentUrl) {
-				this.goToNewTab(currentUrl);
-			}
-		}
-	}
+  const newTab = (url, linkType) => {
+    createNewTab(url || AppConstants.HOMEPAGE_URL, linkType);
+  };
 
-	goToNewTab = url => {
-		this.newTab(url);
-		this.props.navigation.setParams({
-			...this.props.navigation.state.params,
-			newTabUrl: null
-		});
-	};
+  const updateTabInfo = (url, tabID) =>
+    updateTab(tabID, {
+      url,
+    });
 
-	showTabs = async () => {
-		try {
-			const activeTab = this.props.tabs.find(tab => tab.id === this.props.activeTab);
-			await this.takeScreenshot(activeTab.url, activeTab.id);
-		} catch (e) {
-			Logger.error(e);
-		}
+  const hideTabsAndUpdateUrl = (url) => {
+    navigation.setParams({
+      ...route.params,
+      showTabs: false,
+      url,
+      silent: false,
+    });
+  };
 
-		this.props.navigation.setParams({
-			...this.props.navigation.state.params,
-			showTabs: true
-		});
-	};
+  const switchToTab = (tab) => {
+    trackEvent(
+      createEventBuilder(MetaMetricsEvents.BROWSER_SWITCH_TAB).build(),
+    );
+    setActiveTab(tab.id);
+    hideTabsAndUpdateUrl(tab.url);
+    updateTabInfo(tab.url, tab.id);
+  };
 
-	hideTabsAndUpdateUrl = url => {
-		this.props.navigation.setParams({
-			...this.props.navigation.state.params,
-			showTabs: false,
-			url,
-			silent: false
-		});
-	};
+  const hasAccounts = useRef(Boolean(accounts.length));
 
-	closeAllTabs = () => {
-		if (this.props.tabs.length) {
-			this.props.closeAllTabs();
-			this.props.navigation.setParams({
-				...this.props.navigation.state.params,
-				url: null,
-				silent: true
-			});
-		}
-	};
+  useEffect(() => {
+    const checkIfActiveAccountChanged = async () => {
+      const hostname = new URL(browserUrl).hostname;
+      const permittedAccounts = await getPermittedAccounts(hostname);
+      const activeAccountAddress = permittedAccounts?.[0];
 
-	newTab = url => {
-		this.props.createNewTab(url || AppConstants.HOMEPAGE_URL);
-		setTimeout(() => {
-			const { tabs } = this.props;
-			this.switchToTab(tabs[tabs.length - 1]);
-		}, 100);
-	};
+      if (activeAccountAddress) {
+        const accountName = getAccountNameWithENS({
+          accountAddress: activeAccountAddress,
+          accounts,
+          ensByAccountAddress,
+        });
+        // Show active account toast
+        toastRef?.current?.showToast({
+          variant: ToastVariants.Account,
+          labelOptions: [
+            {
+              label: `${accountName} `,
+              isBold: true,
+            },
+            { label: strings('toast.now_active') },
+          ],
+          accountAddress: activeAccountAddress,
+          accountAvatarType,
+        });
+      }
+    };
 
-	closeTab = tab => {
-		const { activeTab, tabs } = this.props;
+    // Handle when the Browser initially mounts and when url changes.
+    if (accounts.length && browserUrl) {
+      const hostname = new URL(browserUrl).hostname;
+      if (prevSiteHostname.current !== hostname || !hasAccounts.current) {
+        checkIfActiveAccountChanged();
+      }
+      hasAccounts.current = true;
+      prevSiteHostname.current = hostname;
+    }
+  }, [browserUrl, accounts, ensByAccountAddress, accountAvatarType, toastRef]);
 
-		// If the tab was selected we have to select
-		// the next one, and if there's no next one,
-		// we select the previous one.
-		if (tab.id === activeTab) {
-			if (tabs.length > 1) {
-				tabs.forEach((t, i) => {
-					if (t.id === tab.id) {
-						let newTab = tabs[i - 1];
-						if (tabs[i + 1]) {
-							newTab = tabs[i + 1];
-						}
-						this.props.setActiveTab(newTab.id);
-						this.props.navigation.setParams({
-							...this.props.navigation.state.params,
-							url: newTab.url,
-							silent: true
-						});
-					}
-				});
-			} else {
-				this.props.navigation.setParams({
-					...this.props.navigation.state.params,
-					url: null,
-					silent: true
-				});
-			}
-		}
+  // componentDidMount
+  useEffect(
+    () => {
+      const currentUrl = route.params?.newTabUrl;
+      const existingTabId = route.params?.existingTabId;
+      if (!currentUrl && !existingTabId) {
+        // Nothing from deeplink, carry on.
+        const activeTab = tabs.find((tab) => tab.id === activeTabId);
+        if (activeTab) {
+          // Resume where last left off.
+          switchToTab(activeTab);
+        } else {
+          /* eslint-disable-next-line */
+          if (tabs.length) {
+            // Tabs exists but no active set. Show first tab.
+            switchToTab(tabs[0]);
+          } else {
+            // No tabs. Create a new one.
+            newTab();
+          }
+        }
+      }
+      // Initialize previous tabs. This prevents the next useEffect block from running the first time.
+      previousTabs.current = tabs || [];
+    },
+    /* eslint-disable-next-line */
+    [],
+  );
 
-		this.props.closeTab(tab.id);
-	};
+  // Detect when new tab is added and switch to it.
+  useEffect(
+    () => {
+      if (previousTabs.current && tabs.length > previousTabs.current.length) {
+        // New tab was added.
+        const tabToSwitch = tabs[tabs.length - 1];
+        switchToTab(tabToSwitch);
+      }
+      previousTabs.current = tabs;
+    },
+    /* eslint-disable-next-line */
+    [tabs],
+  );
 
-	closeTabsView = () => {
-		if (this.props.tabs.length) {
-			this.props.navigation.setParams({
-				...this.props.navigation.state.params,
-				showTabs: false,
-				silent: true
-			});
-		}
-	};
+  // Handle links with associated timestamp.
+  useEffect(
+    () => {
+      const newTabUrl = route.params?.newTabUrl;
+      const deeplinkTimestamp = route.params?.timestamp;
+      const existingTabId = route.params?.existingTabId;
+      if (newTabUrl && deeplinkTimestamp) {
+        // Open url from link.
+        newTab(newTabUrl, linkType);
+      } else if (existingTabId) {
+        const existingTab = tabs.find((tab) => tab.id === existingTabId);
+        if (existingTab) {
+          switchToTab(existingTab);
+        }
+      }
+    },
+    /* eslint-disable-next-line */
+    [
+      route.params?.timestamp,
+      route.params?.newTabUrl,
+      route.params?.existingTabId,
+    ],
+  );
 
-	switchToTab = tab => {
-		this.props.setActiveTab(tab.id);
-		this.hideTabsAndUpdateUrl(tab.url);
-		this.updateTabInfo(tab.url, tab.id);
-	};
+  const takeScreenshot = (url, tabID) =>
+    new Promise((resolve, reject) => {
+      captureScreen({
+        format: 'jpg',
+        quality: 0.2,
+        THUMB_WIDTH,
+        THUMB_HEIGHT,
+      }).then(
+        (uri) => {
+          updateTab(tabID, {
+            url,
+            image: uri,
+          });
+          resolve(true);
+        },
+        (error) => {
+          Logger.error(error, `Error saving tab ${url}`);
+          reject(error);
+        },
+      );
+    });
 
-	renderTabsView() {
-		const { tabs, activeTab } = this.props;
-		const showTabs = this.props.navigation.getParam('showTabs', false);
-		if (showTabs) {
-			return (
-				<Tabs
-					tabs={tabs}
-					activeTab={activeTab}
-					switchToTab={this.switchToTab}
-					newTab={this.newTab}
-					closeTab={this.closeTab}
-					closeTabsView={this.closeTabsView}
-					closeAllTabs={this.closeAllTabs}
-				/>
-			);
-		}
-		return null;
-	}
+  const showTabs = async () => {
+    try {
+      const activeTab = tabs.find((tab) => tab.id === activeTabId);
+      await takeScreenshot(activeTab.url, activeTab.id);
+    } catch (e) {
+      Logger.error(e);
+    }
 
-	updateTabInfo = (url, tabID) =>
-		this.props.updateTab(tabID, {
-			url
-		});
+    navigation.setParams({
+      ...route.params,
+      showTabs: true,
+    });
+  };
 
-	takeScreenshot = (url, tabID) =>
-		new Promise((resolve, reject) => {
-			captureScreen({
-				format: 'jpg',
-				quality: 0.2,
-				THUMB_WIDTH,
-				THUMB_HEIGHT
-			}).then(
-				uri => {
-					const { updateTab } = this.props;
+  const closeAllTabs = () => {
+    if (tabs.length) {
+      triggerCloseAllTabs();
+      navigation.setParams({
+        ...route.params,
+        url: null,
+        silent: true,
+      });
+    }
+  };
 
-					updateTab(tabID, {
-						url,
-						image: uri
-					});
-					resolve(true);
-				},
-				error => {
-					Logger.error(error, `Error saving tab ${url}`);
-					reject(error);
-				}
-			);
-		});
+  const closeTab = (tab) => {
+    // If the tab was selected we have to select
+    // the next one, and if there's no next one,
+    // we select the previous one.
+    if (tab.id === activeTabId) {
+      if (tabs.length > 1) {
+        tabs.forEach((t, i) => {
+          if (t.id === tab.id) {
+            let newTab = tabs[i - 1];
+            if (tabs[i + 1]) {
+              newTab = tabs[i + 1];
+            }
+            setActiveTab(newTab.id);
+            navigation.setParams({
+              ...route.params,
+              url: newTab.url,
+              silent: true,
+            });
+          }
+        });
+      } else {
+        navigation.setParams({
+          ...route.params,
+          url: null,
+          silent: true,
+        });
+      }
+    }
 
-	renderBrowserTabs = () =>
-		this.props.tabs.map(tab => (
-			<BrowserTab
-				id={tab.id}
-				key={`tab_${tab.id}`}
-				initialUrl={tab.url || AppConstants.HOMEPAGE_URL}
-				updateTabInfo={this.updateTabInfo}
-				showTabs={this.showTabs}
-				newTab={this.newTab}
-			/>
-		));
+    triggerCloseTab(tab.id);
+  };
 
-	render() {
-		return (
-			<View style={baseStyles.flexGrow} testID={'browser-screen'}>
-				{this.renderBrowserTabs()}
-				{this.renderTabsView()}
-			</View>
-		);
-	}
-}
+  const closeTabsView = () => {
+    if (tabs.length) {
+      navigation.setParams({
+        ...route.params,
+        showTabs: false,
+        silent: true,
+      });
+    }
+  };
 
-const mapStateToProps = state => ({
-	tabs: state.browser.tabs,
-	activeTab: state.browser.activeTab
+  const renderTabsView = () => {
+    const showTabs = route.params?.showTabs;
+    if (showTabs) {
+      return (
+        <Tabs
+          tabs={tabs}
+          activeTab={activeTabId}
+          switchToTab={switchToTab}
+          newTab={newTab}
+          closeTab={closeTab}
+          closeTabsView={closeTabsView}
+          closeAllTabs={closeAllTabs}
+        />
+      );
+    }
+    return null;
+  };
+
+  const renderBrowserTabs = () =>
+    tabs.map((tab) => (
+      <BrowserTab
+        id={tab.id}
+        key={`tab_${tab.id}`}
+        initialUrl={tab.url || AppConstants.HOMEPAGE_URL}
+        linkType={tab.linkType}
+        updateTabInfo={updateTabInfo}
+        showTabs={showTabs}
+        newTab={newTab}
+        isInTabsView={route.params?.showTabs}
+      />
+    ));
+
+  return (
+    <View
+      style={baseStyles.flexGrow}
+      testID={BrowserViewSelectorsIDs.BROWSER_SCREEN_ID}
+    >
+      {renderBrowserTabs()}
+      {renderTabsView()}
+    </View>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  accountsLength: selectAccountsLength(state),
+  networkConfigurations: selectNetworkConfigurations(state),
+  tabs: state.browser.tabs,
+  activeTab: state.browser.activeTab,
+  chainId: selectChainId(state),
 });
 
-const mapDispatchToProps = dispatch => ({
-	createNewTab: url => dispatch(createNewTab(url)),
-	closeAllTabs: () => dispatch(closeAllTabs()),
-	closeTab: id => dispatch(closeTab(id)),
-	setActiveTab: id => dispatch(setActiveTab(id)),
-	updateTab: (id, url) => dispatch(updateTab(id, url))
+const mapDispatchToProps = (dispatch) => ({
+  createNewTab: (url, linkType) => dispatch(createNewTab(url, linkType)),
+  closeAllTabs: () => dispatch(closeAllTabs()),
+  closeTab: (id) => dispatch(closeTab(id)),
+  setActiveTab: (id) => dispatch(setActiveTab(id)),
+  updateTab: (id, url) => dispatch(updateTab(id, url)),
 });
 
-export default connect(
-	mapStateToProps,
-	mapDispatchToProps
-)(Browser);
+Browser.propTypes = {
+  /**
+   * react-navigation object used to switch between screens
+   */
+  navigation: PropTypes.object,
+  /**
+   * Function to create a new tab
+   */
+  createNewTab: PropTypes.func,
+  /**
+   * Function to close all the existing tabs
+   */
+  closeAllTabs: PropTypes.func,
+  /**
+   * Function to close a specific tab
+   */
+  closeTab: PropTypes.func,
+  /**
+   * Function to set the active tab
+   */
+  setActiveTab: PropTypes.func,
+  /**
+   * Function to set the update the url of a tab
+   */
+  updateTab: PropTypes.func,
+  /**
+   * Array of tabs
+   */
+  tabs: PropTypes.array,
+  /**
+   * ID of the active tab
+   */
+  activeTab: PropTypes.number,
+  /**
+   * Object that represents the current route info like params passed to it
+   */
+  route: PropTypes.object,
+  accountsLength: PropTypes.number,
+  networkConfigurations: PropTypes.object,
+  /**
+   * Current network chainId
+   */
+  chainId: PropTypes.string,
+};
+
+export { default as createBrowserNavDetails } from './Browser.types';
+
+export default connect(mapStateToProps, mapDispatchToProps)(Browser);

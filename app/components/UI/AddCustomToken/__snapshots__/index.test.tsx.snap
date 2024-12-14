@@ -1,0 +1,248 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AddCustomToken render matches previous snapshot 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "#ffffff",
+      "flex": 1,
+    }
+  }
+>
+  <RCTScrollView>
+    <View>
+      <View
+        style={
+          [
+            {
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "paddingHorizontal": 12,
+              "paddingVertical": 8,
+            },
+            undefined,
+            {
+              "backgroundColor": "#0376c91a",
+              "borderColor": "#0376c9",
+            },
+            {
+              "marginHorizontal": 20,
+              "marginTop": 20,
+            },
+          ]
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+            }
+          }
+        >
+          <Text
+            allowFontScaling={false}
+            style={
+              [
+                {
+                  "color": "#0376c9",
+                  "fontSize": 18,
+                },
+                {
+                  "paddingRight": 8,
+                  "paddingTop": 4,
+                },
+                {
+                  "fontFamily": "FontAwesome",
+                  "fontStyle": "normal",
+                  "fontWeight": "normal",
+                },
+                {},
+              ]
+            }
+          >
+            
+          </Text>
+        </View>
+        <Text
+          style={
+            [
+              {
+                "color": "#141618",
+                "fontFamily": "EuclidCircularB-Regular",
+                "fontSize": 30,
+                "fontWeight": "400",
+                "marginVertical": 2,
+              },
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              [
+                {
+                  "color": "#141618",
+                  "flex": 1,
+                  "fontSize": 14,
+                  "lineHeight": 17,
+                },
+                {
+                  "marginRight": 12,
+                },
+              ],
+            ]
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#141618",
+              }
+            }
+          >
+            Token detection is not available on this network yet. Please import token manually and make sure you trust it. Learn about 
+          </Text>
+          <Text
+            onPress={[Function]}
+            style={
+              {
+                "color": "#0376c9",
+              }
+            }
+            suppressHighlighting={true}
+          >
+            token scams and security risks.
+          </Text>
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "paddingHorizontal": 16,
+            "paddingTop": 16,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#141618",
+              "fontFamily": "EuclidCircularB-Regular",
+              "fontWeight": "400",
+            }
+          }
+        >
+          Token contract address
+        </Text>
+        <TextInput
+          keyboardAppearance="light"
+          onBlur={[Function]}
+          onChangeText={[Function]}
+          onFocus={[Function]}
+          onSubmitEditing={[Function]}
+          placeholder="0x..."
+          placeholderTextColor="#9fa6ae"
+          returnKeyType="next"
+          style={
+            {
+              "borderColor": "#bbc0c5",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "color": "#141618",
+              "fontFamily": "EuclidCircularB-Regular",
+              "fontWeight": "400",
+              "paddingHorizontal": 16,
+              "paddingVertical": 12,
+            }
+          }
+          testID="input-token-address"
+          value=""
+        />
+        <Text
+          style={
+            {
+              "color": "#d73847",
+              "fontFamily": "EuclidCircularB-Regular",
+              "fontWeight": "400",
+              "marginTop": 0,
+              "paddingBottom": 8,
+            }
+          }
+          testID="token-address-warning"
+        />
+      </View>
+    </View>
+  </RCTScrollView>
+  <View
+    style={
+      {
+        "paddingVertical": 20,
+      }
+    }
+  >
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessible={true}
+      activeOpacity={1}
+      disabled={true}
+      onPress={[Function]}
+      onPressIn={[Function]}
+      onPressOut={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "alignSelf": "center",
+          "backgroundColor": "#0376c9",
+          "borderRadius": 24,
+          "color": "#0376c9",
+          "flexDirection": "row",
+          "fontFamily": "EuclidCircularB-Regular",
+          "fontSize": 18,
+          "fontWeight": "400",
+          "height": 48,
+          "justifyContent": "center",
+          "opacity": 0.5,
+          "paddingHorizontal": 16,
+          "position": "relative",
+          "width": "90%",
+        }
+      }
+      testID="token-import-next-button"
+    >
+      <Text
+        accessibilityRole="text"
+        style={
+          {
+            "color": "#ffffff",
+            "fontFamily": "EuclidCircularB-Regular",
+            "fontSize": 14,
+            "fontWeight": "400",
+            "letterSpacing": 0,
+            "lineHeight": 22,
+          }
+        }
+      >
+        Next
+      </Text>
+    </TouchableOpacity>
+  </View>
+</View>
+`;

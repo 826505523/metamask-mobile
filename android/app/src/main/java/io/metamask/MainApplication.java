@@ -1,31 +1,46 @@
 package io.metamask;
+import android.content.res.Configuration;
+import expo.modules.ApplicationLifecycleDispatcher;
+import expo.modules.ReactNativeHostWrapper;
 
+import android.app.Application;
 import com.facebook.react.ReactApplication;
-import com.cmcewen.blurview.BlurViewPackage;
-import android.content.Context;
+import com.brentvatne.react.ReactVideoPackage;
 import com.facebook.react.PackageList;
-import com.facebook.react.ReactInstanceManager;
 import com.airbnb.android.react.lottie.LottiePackage;
-import com.swmansion.gesturehandler.react.RNGestureHandlerPackage;
+
+import cl.json.ShareApplication;
 import io.branch.rnbranch.RNBranchModule;
-import io.metamask.nativeModules.RCTAnalyticsPackage;
+import io.metamask.nativeModules.RCTMinimizerPackage;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
 import com.facebook.soloader.SoLoader;
-import cl.json.ShareApplication;
-import java.lang.reflect.InvocationTargetException;
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
+import com.facebook.react.defaults.DefaultReactNativeHost;
 import java.util.List;
 import io.metamask.nativeModules.PreventScreenshotPackage;
 import android.webkit.WebView;
 
-import androidx.multidex.MultiDexApplication;
-
 import android.database.CursorWindow;
 import java.lang.reflect.Field;
 
-public class MainApplication extends MultiDexApplication implements ShareApplication, ReactApplication {
+import io.metamask.nativesdk.NativeSDKPackage;
+import io.metamask.nativeModules.RNTar.RNTarPackage;
 
-	private final ReactNativeHost mReactNativeHost = new ReactNativeHost(this) {
+import android.content.Context;
+import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.os.Build;
+
+public class MainApplication extends Application implements ShareApplication, ReactApplication {
+
+  @Override
+  public String getFileProviderAuthority() {
+    return BuildConfig.APPLICATION_ID + ".provider";
+  }
+
+	private final ReactNativeHost mReactNativeHost = new ReactNativeHostWrapper(this, new DefaultReactNativeHost(this) {
 		@Override
 		public boolean getUseDeveloperSupport() {
 			return BuildConfig.DEBUG;
@@ -33,21 +48,32 @@ public class MainApplication extends MultiDexApplication implements ShareApplica
 
 		@Override
 		protected List<ReactPackage> getPackages() {
-			@SuppressWarnings("UnnecessaryLocalVariable")
-			List<ReactPackage> packages = new PackageList(this).getPackages();
+      @SuppressWarnings("UnnecessaryLocalVariable")
+      List<ReactPackage> packages = new PackageList(this).getPackages();
 			packages.add(new LottiePackage());
-			packages.add(new RNGestureHandlerPackage());
-			packages.add(new RCTAnalyticsPackage());
 			packages.add(new PreventScreenshotPackage());
+			packages.add(new ReactVideoPackage());
+      packages.add(new RCTMinimizerPackage());
+      packages.add(new NativeSDKPackage());
+      packages.add(new RNTarPackage());
 
-			return packages;
+      return packages;
 		}
+
+    @Override
+    protected boolean isNewArchEnabled() {
+      return BuildConfig.IS_NEW_ARCHITECTURE_ENABLED;
+    }
+    @Override
+    protected Boolean isHermesEnabled() {
+      return BuildConfig.IS_HERMES_ENABLED;
+    }
 
 		@Override
 		protected String getJSMainModuleName() {
-			return "index";
+			return ".expo/.virtual-metro-entry";
 		}
-  	};
+  	});
 
 	@Override
 	public ReactNativeHost getReactNativeHost() {
@@ -55,8 +81,17 @@ public class MainApplication extends MultiDexApplication implements ShareApplica
 	}
 
 	@Override
+	public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) {
+		if (Build.VERSION.SDK_INT >= 34 && getApplicationInfo().targetSdkVersion >= 34) {
+			return super.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+		} else {
+			return super.registerReceiver(receiver, filter);
+		}
+	}
+	@Override
 	public void onCreate() {
 		super.onCreate();
+		RNBranchModule.getAutoInstance(this);
 
 		try {
 			Field field = CursorWindow.class.getDeclaredField("sCursorWindowSize");
@@ -65,48 +100,27 @@ public class MainApplication extends MultiDexApplication implements ShareApplica
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
-    if (BuildConfig.DEBUG)
-    { WebView.setWebContentsDebuggingEnabled(true); }
-		SoLoader.init(this, /* native exopackage */ false);
-
-		initializeFlipper(this, getReactNativeHost().getReactInstanceManager());
-		RNBranchModule.getAutoInstance(this);
-
-    }
-    /**
-     * Loads Flipper in React Native templates. Call this in the onCreate method with something like
-     * initializeFlipper(this, getReactNativeHost().getReactInstanceManager());
-     *
-     * @param context
-     * @param reactInstanceManager
-     */
-    private static void initializeFlipper(
-    	Context context, ReactInstanceManager reactInstanceManager) {
-    	if (BuildConfig.DEBUG) {
-    		try {
-    		  /*
-    		   We use reflection here to pick up the class that initializes Flipper,
-    		  since Flipper library is not available in release mode
-    		  */
-    		  Class<?> aClass = Class.forName("io.metamask.ReactNativeFlipper");
-    		  aClass
-    		      .getMethod("initializeFlipper", Context.class, ReactInstanceManager.class)
-    		      .invoke(null, context, reactInstanceManager);
-    		} catch (ClassNotFoundException e) {
-    		  e.printStackTrace();
-    		} catch (NoSuchMethodException e) {
-    		  e.printStackTrace();
-    		} catch (IllegalAccessException e) {
-    		  e.printStackTrace();
-    		} catch (InvocationTargetException e) {
-    		  e.printStackTrace();
-    		}
+		// These two lines are here to enable debugging WebView from Chrome DevTools.
+		// The variables are set in the build.gradle file with values coming from the environment variables
+		// `RAMP_DEV_BUILD` and `RAMP_INTERNAL_BUILD`.
+		// These variables are defined at build time in Bitrise
+		if (BuildConfig.DEBUG || BuildConfig.IS_RAMP_UAT.equals("true") || BuildConfig.IS_RAMP_DEV.equals("true")) {
+			WebView.setWebContentsDebuggingEnabled(true);
 		}
-	}
 
-	@Override
-	public String getFileProviderAuthority() {
-		return BuildConfig.APPLICATION_ID + ".provider";
-	}
+		SoLoader.init(this, /* native exopackage */ false);
+    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+      // If you opted-in for the New Architecture, we load the native entry point for this app.
+      DefaultNewArchitectureEntryPoint.load();
+    }
+
+    ReactNativeFlipper.initializeFlipper(this, getReactNativeHost().getReactInstanceManager());
+    ApplicationLifecycleDispatcher.onApplicationCreate(this);
+  }
+
+  @Override
+  public void onConfigurationChanged(Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig);
+  }
 }
